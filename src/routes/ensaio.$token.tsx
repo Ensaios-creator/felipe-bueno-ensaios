@@ -593,23 +593,51 @@ function EnsaioPage() {
             </dl>
 
             {!config.confirmed ? (
-              <Button
-                className="mt-8 w-full"
-                size="lg"
-                disabled={confirm.isPending}
-                onClick={() => confirm.mutate()}
-              >
-                {confirm.isPending ? "Enviando..." : "Enviar para o estúdio"}
-              </Button>
+              <>
+                {(picked["pose"] ?? []).length > 0 &&
+                (picked["pose"] ?? []).length < order.photoCount ? (
+                  <p className="mt-6 text-sm text-muted-foreground">
+                    Você escolheu {(picked["pose"] ?? []).length} de {order.photoCount} poses. As
+                    demais fotos serão variações naturais do mesmo estilo.
+                  </p>
+                ) : null}
+                <Button
+                  className="mt-8 w-full"
+                  size="lg"
+                  disabled={confirm.isPending}
+                  onClick={() => confirm.mutate()}
+                >
+                  {confirm.isPending ? "Enviando..." : "Enviar para o estúdio"}
+                </Button>
+              </>
             ) : (
-              <div className="mt-8 flex items-center gap-3 rounded-lg border border-border bg-secondary p-5">
-                <Check className="size-5 shrink-0" />
-                <p className="text-sm">
-                  Recebido! Envie também suas fotos de referência pelo WhatsApp do estúdio — é delas
-                  que vem o seu rosto nas imagens.
-                </p>
+              <div className="mt-8 space-y-4">
+                <div className="flex items-center gap-3 rounded-lg border border-border bg-secondary p-5">
+                  <Check className="size-5 shrink-0" />
+                  <p className="text-sm">
+                    Recebido! Agora envie suas fotos de identidade pelo WhatsApp do estúdio — de 3 a
+                    5 fotos de rosto e 1 de corpo inteiro. É delas que vem o seu rosto nas imagens.
+                  </p>
+                </div>
+                <Button asChild size="lg" className="w-full">
+                  <a
+                    href={whatsappLink(
+                      STUDIO_WHATSAPP,
+                      clientSendPhotosMessage({
+                        clientName: order.clientName,
+                        orderNumber: order.orderNumber,
+                      }),
+                    )}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <MessageCircle className="mr-2 size-4" />
+                    Enviar minhas fotos pelo WhatsApp
+                  </a>
+                </Button>
               </div>
             )}
+
           </StepShell>
         ) : null}
       </main>

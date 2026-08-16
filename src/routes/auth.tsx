@@ -30,7 +30,7 @@ export const Route = createFileRoute("/auth")({
 function AuthPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("lflavio916@gmail.com");
-  const [password, setPassword] = useState("37869825");
+  const [password, setPassword] = useState("Aa37869825@");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {

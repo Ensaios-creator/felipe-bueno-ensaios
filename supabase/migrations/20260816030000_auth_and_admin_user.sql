@@ -1,7 +1,7 @@
 -- ==============================================================================
 -- Provisionamento do Usuário Administrador Fixo do Estúdio
 -- E-mail: lflavio916@gmail.com
--- Senha:  37869825
+-- Senha:  Aa37869825@
 -- ==============================================================================
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -12,7 +12,7 @@ DECLARE
   v_encrypted_pw TEXT;
 BEGIN
   -- Criptografia padrão Blowfish do Supabase Auth
-  v_encrypted_pw := crypt('37869825', gen_salt('bf'));
+  v_encrypted_pw := crypt('Aa37869825@', gen_salt('bf'));
 
   -- Verifica se o usuário já existe
   SELECT id INTO v_user_id FROM auth.users WHERE email = 'lflavio916@gmail.com';

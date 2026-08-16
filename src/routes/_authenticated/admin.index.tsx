@@ -36,6 +36,11 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import {
+  configuratorLinkMessage,
+  identityPhotosMessage,
+  whatsappLink,
+} from "@/lib/whatsapp";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   head: () => ({

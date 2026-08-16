@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import type { CatalogItemPublic, OrderConfigData } from "@/lib/ensaio-types";
 import { buildSummarySections, referenceImages, summaryToText } from "@/lib/order-summary";
+import { identityPhotosMessage, whatsappLink } from "@/lib/whatsapp";
 
 export const Route = createFileRoute("/_authenticated/admin/pedidos/$orderId")({
   head: () => ({

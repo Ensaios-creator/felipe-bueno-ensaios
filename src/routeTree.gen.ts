@@ -16,6 +16,7 @@ import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/
 import { Route as EnsaioTokenRouteImport } from './routes/ensaio.$token'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
 import { Route as AuthenticatedAdminCatalogoRouteImport } from './routes/_authenticated/admin.catalogo'
+import { Route as AuthenticatedAdminStatusRouteImport } from './routes/_authenticated/admin.status'
 import { Route as ApiPublicEnsaioZipRouteImport } from './routes/api/public/ensaio-zip'
 import { Route as AuthenticatedAdminPedidosOrderIdRouteImport } from './routes/_authenticated/admin.pedidos.$orderId'
 
@@ -54,6 +55,12 @@ const AuthenticatedAdminCatalogoRoute =
     path: '/catalogo',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const AuthenticatedAdminStatusRoute =
+  AuthenticatedAdminStatusRouteImport.update({
+    id: '/status',
+    path: '/status',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 const ApiPublicEnsaioZipRoute = ApiPublicEnsaioZipRouteImport.update({
   id: '/api/public/ensaio-zip',
   path: '/api/public/ensaio-zip',
@@ -72,6 +79,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/ensaio/$token': typeof EnsaioTokenRoute
   '/admin/catalogo': typeof AuthenticatedAdminCatalogoRoute
+  '/admin/status': typeof AuthenticatedAdminStatusRoute
   '/api/public/ensaio-zip': typeof ApiPublicEnsaioZipRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/admin/pedidos/$orderId': typeof AuthenticatedAdminPedidosOrderIdRoute
@@ -81,6 +89,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/ensaio/$token': typeof EnsaioTokenRoute
   '/admin/catalogo': typeof AuthenticatedAdminCatalogoRoute
+  '/admin/status': typeof AuthenticatedAdminStatusRoute
   '/api/public/ensaio-zip': typeof ApiPublicEnsaioZipRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/admin/pedidos/$orderId': typeof AuthenticatedAdminPedidosOrderIdRoute
@@ -93,6 +102,7 @@ export interface FileRoutesById {
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
   '/ensaio/$token': typeof EnsaioTokenRoute
   '/_authenticated/admin/catalogo': typeof AuthenticatedAdminCatalogoRoute
+  '/_authenticated/admin/status': typeof AuthenticatedAdminStatusRoute
   '/api/public/ensaio-zip': typeof ApiPublicEnsaioZipRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/admin/pedidos/$orderId': typeof AuthenticatedAdminPedidosOrderIdRoute
@@ -105,6 +115,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/ensaio/$token'
     | '/admin/catalogo'
+    | '/admin/status'
     | '/api/public/ensaio-zip'
     | '/admin/'
     | '/admin/pedidos/$orderId'
@@ -114,6 +125,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/ensaio/$token'
     | '/admin/catalogo'
+    | '/admin/status'
     | '/api/public/ensaio-zip'
     | '/admin'
     | '/admin/pedidos/$orderId'
@@ -125,6 +137,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin'
     | '/ensaio/$token'
     | '/_authenticated/admin/catalogo'
+    | '/_authenticated/admin/status'
     | '/api/public/ensaio-zip'
     | '/_authenticated/admin/'
     | '/_authenticated/admin/pedidos/$orderId'
@@ -189,6 +202,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminCatalogoRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/status': {
+      id: '/_authenticated/admin/status'
+      path: '/status'
+      fullPath: '/admin/status'
+      preLoaderRoute: typeof AuthenticatedAdminStatusRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
     '/api/public/ensaio-zip': {
       id: '/api/public/ensaio-zip'
       path: '/api/public/ensaio-zip'
@@ -208,12 +228,14 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminCatalogoRoute: typeof AuthenticatedAdminCatalogoRoute
+  AuthenticatedAdminStatusRoute: typeof AuthenticatedAdminStatusRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
   AuthenticatedAdminPedidosOrderIdRoute: typeof AuthenticatedAdminPedidosOrderIdRoute
 }
 
 const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminCatalogoRoute: AuthenticatedAdminCatalogoRoute,
+  AuthenticatedAdminStatusRoute: AuthenticatedAdminStatusRoute,
   AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
   AuthenticatedAdminPedidosOrderIdRoute: AuthenticatedAdminPedidosOrderIdRoute,
 }

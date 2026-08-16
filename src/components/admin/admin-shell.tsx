@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 const NAV = [
   { to: "/admin", label: "Pedidos" },
   { to: "/admin/catalogo", label: "Catálogo" },
+  { to: "/admin/status", label: "Status" },
 ] as const;
 
 export function AdminShell({

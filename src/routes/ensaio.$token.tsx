@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, ArrowRight, Check } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, MessageCircle } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -29,6 +29,7 @@ import {
   savePublicOrder,
 } from "@/lib/public-order.functions";
 import { cn } from "@/lib/utils";
+import { clientSendPhotosMessage, STUDIO_WHATSAPP, whatsappLink } from "@/lib/whatsapp";
 
 export const Route = createFileRoute("/ensaio/$token")({
   ssr: false,
@@ -457,22 +458,56 @@ function EnsaioPage() {
         ) : null}
 
         {step === "pose" ? (
-          <StepShell
-            eyebrow="Poses"
-            title={`Escolha até ${order.photoCount} poses`}
-            hint="A ordem que você tocar é a ordem das fotos. Só a pose muda entre elas."
-          >
-            <p className="mb-4 text-sm text-muted-foreground">
-              {(picked["pose"] ?? []).length} de {order.photoCount} escolhidas
-            </p>
-            <VisualGrid
-              multi
-              items={itemsOf("pose")}
-              selected={picked["pose"] ?? []}
-              onToggle={(id) => toggle("pose", id, true, order.photoCount)}
-            />
-          </StepShell>
+          (() => {
+            const chosen = (picked["pose"] ?? []).length;
+            const remaining = order.photoCount - chosen;
+            return (
+              <StepShell
+                eyebrow="Poses"
+                title={`Escolha até ${order.photoCount} poses`}
+                hint="A ordem que você tocar é a ordem das fotos. Só a pose muda entre elas."
+              >
+                <div className="mb-5 rounded-lg border border-border bg-card p-4">
+                  <div className="flex items-baseline justify-between">
+                    <p className="text-sm text-muted-foreground">
+                      {chosen} de {order.photoCount} escolhidas
+                    </p>
+                    <p className="font-display text-lg font-light">
+                      {remaining <= 0 ? "Completo" : `Faltam ${remaining}`}
+                    </p>
+                  </div>
+                  <div className="mt-3 h-px w-full bg-border">
+                    <div
+                      className="h-px bg-foreground transition-all duration-500"
+                      style={{
+                        width: `${Math.min(100, Math.round((chosen / Math.max(1, order.photoCount)) * 100))}%`,
+                      }}
+                    />
+                  </div>
+                  {remaining > 0 && chosen > 0 ? (
+                    <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                      Você pode enviar assim: as {remaining}{" "}
+                      {remaining === 1 ? "foto restante" : "fotos restantes"} serão variações
+                      naturais dentro do mesmo estilo.
+                    </p>
+                  ) : null}
+                  {remaining < 0 ? (
+                    <p className="mt-3 text-xs leading-relaxed text-destructive">
+                      Você escolheu mais poses do que o seu pacote de {order.photoCount} fotos.
+                    </p>
+                  ) : null}
+                </div>
+                <VisualGrid
+                  multi
+                  items={itemsOf("pose")}
+                  selected={picked["pose"] ?? []}
+                  onToggle={(id) => toggle("pose", id, true, order.photoCount)}
+                />
+              </StepShell>
+            );
+          })()
         ) : null}
+
 
         {step === "detalhes" ? (
           <StepShell
@@ -559,23 +594,51 @@ function EnsaioPage() {
             </dl>
 
             {!config.confirmed ? (
-              <Button
-                className="mt-8 w-full"
-                size="lg"
-                disabled={confirm.isPending}
-                onClick={() => confirm.mutate()}
-              >
-                {confirm.isPending ? "Enviando..." : "Enviar para o estúdio"}
-              </Button>
+              <>
+                {(picked["pose"] ?? []).length > 0 &&
+                (picked["pose"] ?? []).length < order.photoCount ? (
+                  <p className="mt-6 text-sm text-muted-foreground">
+                    Você escolheu {(picked["pose"] ?? []).length} de {order.photoCount} poses. As
+                    demais fotos serão variações naturais do mesmo estilo.
+                  </p>
+                ) : null}
+                <Button
+                  className="mt-8 w-full"
+                  size="lg"
+                  disabled={confirm.isPending}
+                  onClick={() => confirm.mutate()}
+                >
+                  {confirm.isPending ? "Enviando..." : "Enviar para o estúdio"}
+                </Button>
+              </>
             ) : (
-              <div className="mt-8 flex items-center gap-3 rounded-lg border border-border bg-secondary p-5">
-                <Check className="size-5 shrink-0" />
-                <p className="text-sm">
-                  Recebido! Envie também suas fotos de referência pelo WhatsApp do estúdio — é delas
-                  que vem o seu rosto nas imagens.
-                </p>
+              <div className="mt-8 space-y-4">
+                <div className="flex items-center gap-3 rounded-lg border border-border bg-secondary p-5">
+                  <Check className="size-5 shrink-0" />
+                  <p className="text-sm">
+                    Recebido! Agora envie suas fotos de identidade pelo WhatsApp do estúdio — de 3 a
+                    5 fotos de rosto e 1 de corpo inteiro. É delas que vem o seu rosto nas imagens.
+                  </p>
+                </div>
+                <Button asChild size="lg" className="w-full">
+                  <a
+                    href={whatsappLink(
+                      STUDIO_WHATSAPP,
+                      clientSendPhotosMessage({
+                        clientName: order.clientName,
+                        orderNumber: order.orderNumber,
+                      }),
+                    )}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <MessageCircle className="mr-2 size-4" />
+                    Enviar minhas fotos pelo WhatsApp
+                  </a>
+                </Button>
               </div>
             )}
+
           </StepShell>
         ) : null}
       </main>

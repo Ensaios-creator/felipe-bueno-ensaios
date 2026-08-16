@@ -1,6 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { AlertTriangle, Check, Copy, LayoutGrid, List, Plus } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  Copy,
+  LayoutGrid,
+  List,
+  MessageCircle,
+  Plus,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -28,6 +36,11 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
+import {
+  configuratorLinkMessage,
+  identityPhotosMessage,
+  whatsappLink,
+} from "@/lib/whatsapp";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   head: () => ({
@@ -494,12 +507,35 @@ function OrderRowCard({
             {copied ? <Check className="mr-2 size-4" /> : <Copy className="mr-2 size-4" />}
             Copiar link
           </Button>
+          <Button asChild variant="outline" size="sm">
+            <a
+              href={whatsappLink(
+                order.client_phone,
+                order.submitted_at
+                  ? identityPhotosMessage({
+                      clientName: order.client_name,
+                      orderNumber: order.order_number,
+                    })
+                  : configuratorLinkMessage({
+                      clientName: order.client_name,
+                      orderNumber: order.order_number,
+                      link: `${window.location.origin}/ensaio/${order.public_token}`,
+                    }),
+              )}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <MessageCircle className="mr-2 size-4" />
+              {order.submitted_at ? "Pedir fotos" : "Enviar link"}
+            </a>
+          </Button>
           <Button asChild size="sm" variant="ghost">
             <Link to="/admin/pedidos/$orderId" params={{ orderId: order.id }}>
               Ver briefing
             </Link>
           </Button>
         </div>
+
       </div>
     </div>
   );

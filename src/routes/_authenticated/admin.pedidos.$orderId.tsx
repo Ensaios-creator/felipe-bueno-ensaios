@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { AlertTriangle, ArrowLeft, Check, Copy, Download } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, Copy, Download, MessageCircle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import type { CatalogItemPublic, OrderConfigData } from "@/lib/ensaio-types";
 import { buildSummarySections, referenceImages, summaryToText } from "@/lib/order-summary";
+import { identityPhotosMessage, whatsappLink } from "@/lib/whatsapp";
 
 export const Route = createFileRoute("/_authenticated/admin/pedidos/$orderId")({
   head: () => ({
@@ -185,17 +186,34 @@ function OrderDetailPage() {
       }
     >
       {!order.identity_photos_received ? (
-        <div className="mb-8 flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-5">
+        <div className="mb-8 flex flex-wrap items-start gap-4 rounded-lg border border-destructive/40 bg-destructive/5 p-5">
           <AlertTriangle className="mt-0.5 size-5 shrink-0 text-destructive" />
-          <div>
+          <div className="min-w-64 flex-1">
             <p className="font-medium">Fotos de identidade ainda não recebidas</p>
             <p className="mt-1 text-sm text-muted-foreground">
               Não gere prompts antes de receber as fotos da cliente pelo WhatsApp. A identidade vem
               sempre das fotos reais — nunca de descrição escrita.
             </p>
           </div>
+          <Button asChild variant="outline">
+            <a
+              href={whatsappLink(
+                order.client_phone,
+                identityPhotosMessage({
+                  clientName: order.client_name,
+                  orderNumber: order.order_number,
+                }),
+              )}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <MessageCircle className="mr-2 size-4" />
+              Pedir fotos no WhatsApp
+            </a>
+          </Button>
         </div>
       ) : null}
+
 
       <div className="mb-8 flex flex-wrap gap-2">
         <Badge variant="secondary">{order.status}</Badge>

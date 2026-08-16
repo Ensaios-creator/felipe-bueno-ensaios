@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, ArrowRight, Check, MessageCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, MessageCircle, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -23,7 +22,11 @@ import {
   SESSION_TYPES,
 } from "@/lib/ensaio-options";
 import type { OrderConfigData } from "@/lib/ensaio-types";
-import { confirmPublicOrder, getPublicOrder, savePublicOrder } from "@/lib/public-order.functions";
+import {
+  confirmPublicOrderClient,
+  fetchPublicOrder,
+  savePublicOrderClient,
+} from "@/lib/public-order-service";
 import { cn } from "@/lib/utils";
 import { clientSendPhotosMessage, STUDIO_WHATSAPP, whatsappLink } from "@/lib/whatsapp";
 
@@ -64,14 +67,12 @@ type StepId =
 function EnsaioPage() {
   const { token } = Route.useParams();
   const queryClient = useQueryClient();
-  const fetchOrder = useServerFn(getPublicOrder);
-  const saveOrder = useServerFn(savePublicOrder);
-  const confirmOrder = useServerFn(confirmPublicOrder);
 
   const query = useQuery({
     queryKey: ["public-order", token],
-    queryFn: () => fetchOrder({ data: { token } }),
-    retry: false,
+    queryFn: () => fetchPublicOrder(token),
+    retry: 2,
+    staleTime: 1000 * 60 * 5,
   });
 
   const [stepIndex, setStepIndex] = useState(0);
@@ -84,14 +85,14 @@ function EnsaioPage() {
 
   const save = useMutation({
     mutationFn: (payload: {
-      config?: Record<string, unknown>;
+      config?: Partial<OrderConfigData>;
       selections?: Record<string, string[]>;
-    }) => saveOrder({ data: { token, ...payload } }),
+    }) => savePublicOrderClient({ token, ...payload }),
     onError: (error: Error) => toast.error(error.message),
   });
 
   const confirm = useMutation({
-    mutationFn: () => confirmOrder({ data: { token } }),
+    mutationFn: () => confirmPublicOrderClient(token),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["public-order", token] });
       setDraft(null);
@@ -144,12 +145,26 @@ function EnsaioPage() {
   }
 
   if (query.error || !query.data || !config) {
+    const isNotFound =
+      query.error instanceof Error &&
+      (query.error.message.includes("inválido") || query.error.message.includes("não encontrado"));
+
     return (
       <Centered>
-        <p className="font-display text-3xl font-light">Link inválido</p>
-        <p className="mt-3 text-sm text-muted-foreground">
-          Confira o endereço enviado pelo estúdio ou peça um novo link.
+        <p className="font-display text-3xl font-light">
+          {isNotFound ? "Link não encontrado" : "Não foi possível carregar"}
         </p>
+        <p className="mt-3 text-sm text-muted-foreground">
+          {isNotFound
+            ? "Confira o endereço enviado pelo estúdio ou solicite um novo link."
+            : query.error instanceof Error
+              ? query.error.message
+              : "Verifique sua conexão e tente novamente."}
+        </p>
+        <Button variant="outline" className="mt-6 gap-2" onClick={() => query.refetch()}>
+          <RefreshCw className="size-4" />
+          Tentar novamente
+        </Button>
       </Centered>
     );
   }
@@ -238,7 +253,7 @@ function EnsaioPage() {
           <section>
             <p className="eyebrow">Vamos começar</p>
             <h1 className="mt-3 font-display text-4xl font-light leading-tight tracking-tight sm:text-5xl">
-              Olá, {order.clientName.split(" ")[0]}.
+              Olá{order.clientName?.trim() ? `, ${order.clientName.trim().split(" ")[0]}` : ""}.
             </h1>
             <p className="mt-5 text-base leading-relaxed text-muted-foreground">
               Seu pacote tem <strong className="text-foreground">{order.photoCount} fotos</strong>.

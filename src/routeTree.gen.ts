@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
+import { Route as EnsaioTokenRouteImport } from './routes/ensaio.$token'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
 import { Route as AuthenticatedAdminCatalogoRouteImport } from './routes/_authenticated/admin.catalogo'
 import { Route as ApiPublicEnsaioZipRouteImport } from './routes/api/public/ensaio-zip'
@@ -36,6 +37,11 @@ const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
   id: '/admin',
   path: '/admin',
   getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const EnsaioTokenRoute = EnsaioTokenRouteImport.update({
+  id: '/ensaio/$token',
+  path: '/ensaio/$token',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedAdminIndexRoute = AuthenticatedAdminIndexRouteImport.update({
   id: '/',
@@ -64,6 +70,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/admin': typeof AuthenticatedAdminRouteWithChildren
+  '/ensaio/$token': typeof EnsaioTokenRoute
   '/admin/catalogo': typeof AuthenticatedAdminCatalogoRoute
   '/api/public/ensaio-zip': typeof ApiPublicEnsaioZipRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
@@ -72,6 +79,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/ensaio/$token': typeof EnsaioTokenRoute
   '/admin/catalogo': typeof AuthenticatedAdminCatalogoRoute
   '/api/public/ensaio-zip': typeof ApiPublicEnsaioZipRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
@@ -83,6 +91,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
+  '/ensaio/$token': typeof EnsaioTokenRoute
   '/_authenticated/admin/catalogo': typeof AuthenticatedAdminCatalogoRoute
   '/api/public/ensaio-zip': typeof ApiPublicEnsaioZipRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
@@ -94,6 +103,7 @@ export interface FileRouteTypes {
     | '/'
     | '/auth'
     | '/admin'
+    | '/ensaio/$token'
     | '/admin/catalogo'
     | '/api/public/ensaio-zip'
     | '/admin/'
@@ -102,6 +112,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/ensaio/$token'
     | '/admin/catalogo'
     | '/api/public/ensaio-zip'
     | '/admin'
@@ -112,6 +123,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/auth'
     | '/_authenticated/admin'
+    | '/ensaio/$token'
     | '/_authenticated/admin/catalogo'
     | '/api/public/ensaio-zip'
     | '/_authenticated/admin/'
@@ -122,6 +134,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  EnsaioTokenRoute: typeof EnsaioTokenRoute
   ApiPublicEnsaioZipRoute: typeof ApiPublicEnsaioZipRoute
 }
 
@@ -154,6 +167,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin'
       preLoaderRoute: typeof AuthenticatedAdminRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/ensaio/$token': {
+      id: '/ensaio/$token'
+      path: '/ensaio/$token'
+      fullPath: '/ensaio/$token'
+      preLoaderRoute: typeof EnsaioTokenRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/admin/': {
       id: '/_authenticated/admin/'
@@ -216,6 +236,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  EnsaioTokenRoute: EnsaioTokenRoute,
   ApiPublicEnsaioZipRoute: ApiPublicEnsaioZipRoute,
 }
 export const routeTree = rootRouteImport

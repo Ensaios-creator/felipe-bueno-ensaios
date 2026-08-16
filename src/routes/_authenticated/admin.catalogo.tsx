@@ -67,7 +67,7 @@ const EMPTY = {
   code: "",
   category: "look" as Category,
   name: "",
-  image_url: null,
+  image_url: null as string | null,
   color: "",
   style: "",
   tags: [] as string[],

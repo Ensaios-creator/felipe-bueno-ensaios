@@ -255,26 +255,34 @@ function OrderDetailPage() {
           <p className="eyebrow">Referências visuais escolhidas</p>
           <div className="mt-4 grid grid-cols-2 gap-4">
             {references.map((item) => (
-              <a
+              <div
                 key={item.id}
-                href={item.imageUrl ?? undefined}
-                target="_blank"
-                rel="noreferrer"
-                className="group overflow-hidden rounded-lg border border-border"
+                className="group overflow-hidden rounded-lg border border-border bg-card"
               >
-                <img
-                  src={item.imageUrl ?? ""}
-                  alt={item.name}
-                  loading="lazy"
-                  className="aspect-[4/5] w-full object-cover transition-transform group-hover:scale-[1.02]"
-                />
+                {item.imageUrl ? (
+                  <a href={item.imageUrl} target="_blank" rel="noreferrer">
+                    <img
+                      src={item.imageUrl}
+                      alt={item.name}
+                      loading="lazy"
+                      className="aspect-[4/5] w-full object-cover transition-transform group-hover:scale-[1.02]"
+                    />
+                  </a>
+                ) : (
+                  <div className="flex aspect-[4/5] w-full items-center justify-center bg-muted/60 p-3 text-center">
+                    <span className="font-display text-sm font-light text-muted-foreground">
+                      {item.name}
+                    </span>
+                  </div>
+                )}
                 <p className="p-2 text-xs text-muted-foreground">
-                  {item.code} · {item.name}
+                  <span className="font-mono font-medium text-foreground">{item.code}</span> ·{" "}
+                  {item.name}
                 </p>
-              </a>
+              </div>
             ))}
             {references.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
+              <p className="col-span-2 text-sm text-muted-foreground">
                 A cliente ainda não escolheu referências visuais.
               </p>
             ) : null}

@@ -25,6 +25,28 @@ function describe(items: CatalogItemPublic[]) {
   return items.map((i) => `[${i.code}] ${i.name}\n${i.aiDescription}`).join("\n\n");
 }
 
+function describeCategory(
+  catalog: CatalogItemPublic[],
+  selections: Record<string, string[]>,
+  role: string,
+  optionValue?: string | null,
+  optionsList?: readonly { value: string; label: string; hint?: string }[],
+) {
+  const items = itemsOf(catalog, selections, role);
+  if (items.length > 0) {
+    const desc = describe(items);
+    if (optionValue && optionsList) {
+      const optLabel = labelFor(optionsList as { value: string; label: string }[], optionValue);
+      return `${optLabel}\n\n${desc}`;
+    }
+    return desc;
+  }
+  if (optionValue && optionsList) {
+    return labelFor(optionsList as { value: string; label: string }[], optionValue);
+  }
+  return "Não informado.";
+}
+
 export function sessionTypeLabel(config: OrderConfigData) {
   const base = SESSION_TYPES.find((t) => t.value === config.session_type)?.label ?? "Não informado";
   return config.session_subtype ? `${base} — ${config.session_subtype}` : base;
@@ -77,17 +99,29 @@ export function buildSummarySections(params: {
   if (specific) sections.push({ title: "DETALHES DA CATEGORIA", body: specific });
 
   sections.push(
-    { title: "LOOK / VESTUÁRIO (wardrobe)", body: describe(itemsOf(catalog, selections, "look")) },
-    { title: "CENÁRIO (scene)", body: describe(itemsOf(catalog, selections, "cenario")) },
-    { title: "MAQUIAGEM", body: describe(itemsOf(catalog, selections, "maquiagem")) },
-    { title: "CABELO", body: describe(itemsOf(catalog, selections, "cabelo")) },
-    { title: "ACESSÓRIOS", body: describe(itemsOf(catalog, selections, "acessorio")) },
+    {
+      title: "LOOK / VESTUÁRIO (wardrobe)",
+      body: describeCategory(catalog, selections, "look", config.outfit_mode, OUTFIT_MODES),
+    },
+    { title: "CENÁRIO (scene)", body: describeCategory(catalog, selections, "cenario") },
+    {
+      title: "MAQUIAGEM",
+      body: describeCategory(catalog, selections, "maquiagem", config.makeup, MAKEUP_OPTIONS),
+    },
+    {
+      title: "CABELO",
+      body: describeCategory(catalog, selections, "cabelo", config.hair, HAIR_OPTIONS),
+    },
+    { title: "ACESSÓRIOS", body: describeCategory(catalog, selections, "acessorio") },
     {
       title: "PALETA DE CORES",
       body:
         PALETTE_OPTIONS.find((p) => p.value === config.color_palette)?.label ?? "Não informado.",
     },
-    { title: "ILUMINAÇÃO", body: describe(itemsOf(catalog, selections, "iluminacao")) },
+    {
+      title: "ILUMINAÇÃO",
+      body: describeCategory(catalog, selections, "iluminacao", config.lighting_mood, MOOD_OPTIONS),
+    },
     { title: "POSES (ações)", body: posesBody },
     {
       title: "TEXTO/IDADE VISÍVEL NA CENA",
@@ -121,5 +155,5 @@ export function referenceImages(
   selections: Record<string, string[]>,
 ) {
   const ids = Object.values(selections).flat();
-  return catalog.filter((c) => ids.includes(c.id) && c.imageUrl);
+  return catalog.filter((c) => ids.includes(c.id));
 }

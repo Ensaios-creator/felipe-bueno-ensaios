@@ -158,28 +158,33 @@ function EnsaioPage() {
   const step = steps[stepIndex] ?? "boas-vindas";
 
   function patchConfig(patch: Partial<OrderConfigData>) {
-    const next = { ...config!, ...patch };
-    setDraft(next);
+    setDraft((prev) => {
+      const base = prev ?? query.data?.config ?? ({} as OrderConfigData);
+      return { ...base, ...patch };
+    });
     save.mutate({ config: patch as Record<string, unknown> });
   }
 
   function toggle(role: string, id: string, multi: boolean, max?: number) {
-    const current = picked[role] ?? [];
-    let next: string[];
-    if (current.includes(id)) {
-      next = current.filter((value) => value !== id);
-    } else if (multi) {
-      if (max && current.length >= max) {
-        toast.info(`Você já escolheu ${max}. Toque em uma para trocar.`);
-        return;
+    setSelections((prev) => {
+      const base = prev ?? query.data?.selections ?? {};
+      const current = base[role] ?? [];
+      let next: string[];
+      if (current.includes(id)) {
+        next = current.filter((value) => value !== id);
+      } else if (multi) {
+        if (max && current.length >= max) {
+          toast.info(`Você já escolheu ${max}. Toque em uma para trocar.`);
+          return base;
+        }
+        next = [...current, id];
+      } else {
+        next = [id];
       }
-      next = [...current, id];
-    } else {
-      next = [id];
-    }
-    const merged = { ...picked, [role]: next };
-    setSelections(merged);
-    save.mutate({ selections: { [role]: next } });
+      const merged = { ...base, [role]: next };
+      save.mutate({ selections: { [role]: next } });
+      return merged;
+    });
   }
 
   function itemsOf(category: string) {
@@ -542,10 +547,7 @@ function EnsaioPage() {
                   rows={3}
                   placeholder="Ex: o número 30 em um balão. Se não quiser nada, deixe em branco."
                   value={config.visible_text_answer}
-                  onChange={(event) => {
-                    setDraft({ ...config, visible_text_answer: event.target.value });
-                  }}
-                  onBlur={(event) => patchConfig({ visible_text_answer: event.target.value })}
+                  onChange={(event) => patchConfig({ visible_text_answer: event.target.value })}
                 />
               </div>
               <div className="space-y-2">
@@ -557,8 +559,7 @@ function EnsaioPage() {
                   rows={4}
                   placeholder="Qualquer observação importante para o seu ensaio."
                   value={config.special_notes}
-                  onChange={(event) => setDraft({ ...config, special_notes: event.target.value })}
-                  onBlur={(event) => patchConfig({ special_notes: event.target.value })}
+                  onChange={(event) => patchConfig({ special_notes: event.target.value })}
                 />
               </div>
             </div>

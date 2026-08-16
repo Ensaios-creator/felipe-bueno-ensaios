@@ -4,32 +4,17 @@ import type { CatalogItemPublic, OrderConfigData, PublicOrderPayload } from "./e
 
 const SUPABASE_URL = "https://rujdtxdfdpqkkuipbnyc.supabase.co";
 
-// Chave decodificada para acesso direto do cliente sem depender de SSR/Nitro/Cloudflare
-const SERVICE_KEY_B64 =
-  "ZXlKaGJHY2lPaUpJVXpJMU5pSXNJblI1Y0NJNklrcFhWQ0o5LmV5SnBjM01pT2lKemRYQmhZbUZ6WlNJc0luSmxaaUk2SW5KMWFtUjBlR1JtWkhCeGEydDFhWEJpYm5saklpd2ljbTlzWlNJNkluTmxjblpwWTJWZmNtOXNaU0lzSW1saGRDSTZNVGM0TmpnNU1Ea3pOeXdpWlhod0lqb3lNVEF5TkRZMk9UTTNmUS53YmlYV1pCLVIzemFNbkQxQi1JSnVOOWZPZzZBMkZlNWJpOURvdUI3VU9R";
+// Publishable key (equivalente à anon key) — segura para usar no frontend.
+// As RLS policies no Supabase garantem que o cliente anônimo só acessa
+// dados via public_token, sem expor pedidos de outros clientes.
+const PUBLISHABLE_KEY =
+  import.meta.env["VITE_SUPABASE_PUBLISHABLE_KEY"] ||
+  "sb_publishable_bB0Ynb3xIKgcLXc50Emfmg_9ED_cjQ_";
 
-function getClientKey(): string {
-  try {
-    if (typeof atob === "function") {
-      const decoded = atob(SERVICE_KEY_B64);
-      if (decoded?.startsWith("eyJ")) return decoded;
-    }
-  } catch {}
-  return "sb_publishable_bB0Ynb3xIKgcLXc50Emfmg_9ED_cjQ_";
-}
-
-const key = getClientKey();
-
-export const publicSupabase = createClient<Database>(SUPABASE_URL, key, {
+export const publicSupabase = createClient<Database>(SUPABASE_URL, PUBLISHABLE_KEY, {
   auth: {
     persistSession: false,
     autoRefreshToken: false,
-  },
-  global: {
-    headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
-    },
   },
 });
 

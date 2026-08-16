@@ -29,8 +29,8 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState("lflavio916@gmail.com");
-  const [password, setPassword] = useState("Aa37869825@");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -66,6 +66,7 @@ function AuthPage() {
             <Input
               id="email"
               type="email"
+              placeholder="seu@email.com"
               autoComplete="email"
               required
               value={email}
@@ -77,6 +78,7 @@ function AuthPage() {
             <Input
               id="password"
               type="password"
+              placeholder="••••••••"
               autoComplete="current-password"
               required
               minLength={6}

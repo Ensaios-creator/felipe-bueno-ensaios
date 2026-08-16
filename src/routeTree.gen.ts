@@ -15,6 +15,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
 import { Route as AuthenticatedAdminCatalogoRouteImport } from './routes/_authenticated/admin.catalogo'
+import { Route as ApiPublicEnsaioZipRouteImport } from './routes/api/public/ensaio-zip'
 import { Route as AuthenticatedAdminPedidosOrderIdRouteImport } from './routes/_authenticated/admin.pedidos.$orderId'
 
 const IndexRoute = IndexRouteImport.update({
@@ -47,6 +48,11 @@ const AuthenticatedAdminCatalogoRoute =
     path: '/catalogo',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const ApiPublicEnsaioZipRoute = ApiPublicEnsaioZipRouteImport.update({
+  id: '/api/public/ensaio-zip',
+  path: '/api/public/ensaio-zip',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedAdminPedidosOrderIdRoute =
   AuthenticatedAdminPedidosOrderIdRouteImport.update({
     id: '/pedidos/$orderId',
@@ -59,6 +65,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/admin/catalogo': typeof AuthenticatedAdminCatalogoRoute
+  '/api/public/ensaio-zip': typeof ApiPublicEnsaioZipRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
   '/admin/pedidos/$orderId': typeof AuthenticatedAdminPedidosOrderIdRoute
 }
@@ -66,6 +73,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/admin/catalogo': typeof AuthenticatedAdminCatalogoRoute
+  '/api/public/ensaio-zip': typeof ApiPublicEnsaioZipRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
   '/admin/pedidos/$orderId': typeof AuthenticatedAdminPedidosOrderIdRoute
 }
@@ -76,6 +84,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
   '/_authenticated/admin/catalogo': typeof AuthenticatedAdminCatalogoRoute
+  '/api/public/ensaio-zip': typeof ApiPublicEnsaioZipRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
   '/_authenticated/admin/pedidos/$orderId': typeof AuthenticatedAdminPedidosOrderIdRoute
 }
@@ -86,10 +95,17 @@ export interface FileRouteTypes {
     | '/auth'
     | '/admin'
     | '/admin/catalogo'
+    | '/api/public/ensaio-zip'
     | '/admin/'
     | '/admin/pedidos/$orderId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/admin/catalogo' | '/admin' | '/admin/pedidos/$orderId'
+  to:
+    | '/'
+    | '/auth'
+    | '/admin/catalogo'
+    | '/api/public/ensaio-zip'
+    | '/admin'
+    | '/admin/pedidos/$orderId'
   id:
     | '__root__'
     | '/'
@@ -97,6 +113,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/admin'
     | '/_authenticated/admin/catalogo'
+    | '/api/public/ensaio-zip'
     | '/_authenticated/admin/'
     | '/_authenticated/admin/pedidos/$orderId'
   fileRoutesById: FileRoutesById
@@ -105,6 +122,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  ApiPublicEnsaioZipRoute: typeof ApiPublicEnsaioZipRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -151,6 +169,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminCatalogoRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/api/public/ensaio-zip': {
+      id: '/api/public/ensaio-zip'
+      path: '/api/public/ensaio-zip'
+      fullPath: '/api/public/ensaio-zip'
+      preLoaderRoute: typeof ApiPublicEnsaioZipRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/admin/pedidos/$orderId': {
       id: '/_authenticated/admin/pedidos/$orderId'
       path: '/pedidos/$orderId'
@@ -191,6 +216,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  ApiPublicEnsaioZipRoute: ApiPublicEnsaioZipRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

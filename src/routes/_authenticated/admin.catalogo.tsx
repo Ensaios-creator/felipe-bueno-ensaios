@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { ImageIcon, Pencil, Plus } from "lucide-react";
+import { ArrowDown, ArrowUp, CopyPlus, ImageIcon, Pencil, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { AdminShell } from "@/components/admin/admin-shell";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -103,6 +104,10 @@ function CatalogPage() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<Category>("look");
   const [editing, setEditing] = useState<CatalogRow | null>(null);
+  const [search, setSearch] = useState("");
+  const [styleFilter, setStyleFilter] = useState("todos");
+  const [colorFilter, setColorFilter] = useState("todas");
+  const [selected, setSelected] = useState<string[]>([]);
 
   const items = useQuery({
     queryKey: ["catalog"],
@@ -120,17 +125,92 @@ function CatalogPage() {
   });
 
   const urls = useSignedUrls((items.data ?? []).map((i) => i.image_url));
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["catalog"] });
 
   const toggleActive = useMutation({
     mutationFn: async ({ id, active }: { id: string; active: boolean }) => {
       const { error } = await supabase.from("catalog_items").update({ active }).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["catalog"] }),
+    onSuccess: refresh,
     onError: (error: Error) => toast.error(error.message),
   });
 
-  const filtered = (items.data ?? []).filter((item) => item.category === tab);
+  const bulkActive = useMutation({
+    mutationFn: async ({ ids, active }: { ids: string[]; active: boolean }) => {
+      const { error } = await supabase.from("catalog_items").update({ active }).in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      setSelected([]);
+      await refresh();
+      toast.success("Itens atualizados.");
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const duplicate = useMutation({
+    mutationFn: async (item: CatalogRow) => {
+      const { error } = await supabase.from("catalog_items").insert({
+        code: `${item.code}-COPIA`,
+        category: item.category,
+        name: `${item.name} (cópia)`,
+        image_url: item.image_url,
+        color: item.color,
+        style: item.style,
+        tags: item.tags,
+        ai_description: item.ai_description,
+        position: item.position + 1,
+        active: false,
+      });
+      if (error) throw error;
+    },
+    onSuccess: async () => {
+      await refresh();
+      toast.success("Item duplicado — está oculto até você revisar.");
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const reorder = useMutation({
+    mutationFn: async (rows: CatalogRow[]) => {
+      for (const [index, row] of rows.entries()) {
+        const { error } = await supabase
+          .from("catalog_items")
+          .update({ position: index })
+          .eq("id", row.id);
+        if (error) throw error;
+      }
+    },
+    onSuccess: refresh,
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const inCategory = (items.data ?? []).filter((item) => item.category === tab);
+  const styles = Array.from(new Set(inCategory.map((i) => i.style).filter(Boolean))) as string[];
+  const colors = Array.from(new Set(inCategory.map((i) => i.color).filter(Boolean))) as string[];
+
+  const term = search.trim().toLowerCase();
+  const filtered = inCategory.filter((item) => {
+    const matchStyle = styleFilter === "todos" || item.style === styleFilter;
+    const matchColor = colorFilter === "todas" || item.color === colorFilter;
+    const matchSearch =
+      !term ||
+      item.name.toLowerCase().includes(term) ||
+      item.code.toLowerCase().includes(term) ||
+      item.tags.some((tag) => tag.toLowerCase().includes(term));
+    return matchStyle && matchColor && matchSearch;
+  });
+
+  function move(index: number, direction: -1 | 1) {
+    const rows = [...inCategory];
+    const target = index + direction;
+    if (target < 0 || target >= rows.length) return;
+    const current = rows[index]!;
+    rows[index] = rows[target]!;
+    rows[target] = current;
+    reorder.mutate(rows);
+  }
 
   return (
     <AdminShell
@@ -143,8 +223,16 @@ function CatalogPage() {
         </Button>
       }
     >
-      <Tabs value={tab} onValueChange={(value) => setTab(value as Category)}>
-        <TabsList className="mb-8 flex h-auto flex-wrap justify-start">
+      <Tabs
+        value={tab}
+        onValueChange={(value) => {
+          setTab(value as Category);
+          setSelected([]);
+          setStyleFilter("todos");
+          setColorFilter("todas");
+        }}
+      >
+        <TabsList className="mb-6 flex h-auto flex-wrap justify-start">
           {CATEGORIES.map((category) => (
             <TabsTrigger key={category} value={category}>
               {CATEGORY_LABELS[category]}
@@ -152,6 +240,60 @@ function CatalogPage() {
           ))}
         </TabsList>
       </Tabs>
+
+      <div className="mb-6 flex flex-wrap items-center gap-3">
+        <Input
+          placeholder="Buscar por nome, código ou tag"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          className="max-w-xs"
+        />
+        <Select value={styleFilter} onValueChange={setStyleFilter}>
+          <SelectTrigger className="w-44">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os estilos</SelectItem>
+            {styles.map((style) => (
+              <SelectItem key={style} value={style}>
+                {style}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={colorFilter} onValueChange={setColorFilter}>
+          <SelectTrigger className="w-44">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todas">Todas as cores</SelectItem>
+            {colors.map((color) => (
+              <SelectItem key={color} value={color}>
+                {color}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {selected.length > 0 ? (
+          <div className="ml-auto flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">{selected.length} selecionados</span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => bulkActive.mutate({ ids: selected, active: true })}
+            >
+              Ativar
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => bulkActive.mutate({ ids: selected, active: false })}
+            >
+              Desativar
+            </Button>
+          </div>
+        ) : null}
+      </div>
 
       {items.isLoading ? (
         <p className="text-sm text-muted-foreground">Carregando catálogo...</p>
@@ -165,9 +307,11 @@ function CatalogPage() {
             const src = item.image_url?.startsWith("http")
               ? item.image_url
               : (urls.data?.[item.image_url ?? ""] ?? null);
+            const categoryIndex = inCategory.findIndex((row) => row.id === item.id);
+            const checked = selected.includes(item.id);
             return (
               <div key={item.id} className="overflow-hidden rounded-lg border border-border bg-card">
-                <div className="flex aspect-[4/5] items-center justify-center bg-muted">
+                <div className="relative flex aspect-[4/5] items-center justify-center bg-muted">
                   {src ? (
                     <img
                       src={src}
@@ -178,6 +322,37 @@ function CatalogPage() {
                   ) : (
                     <ImageIcon className="size-8 text-muted-foreground" />
                   )}
+                  <label className="absolute left-3 top-3 flex size-7 items-center justify-center rounded-md border border-border bg-background/90">
+                    <Checkbox
+                      checked={checked}
+                      onCheckedChange={(value) =>
+                        setSelected((current) =>
+                          value ? [...current, item.id] : current.filter((id) => id !== item.id),
+                        )
+                      }
+                      aria-label={`Selecionar ${item.name}`}
+                    />
+                  </label>
+                  <div className="absolute right-3 top-3 flex flex-col gap-1">
+                    <Button
+                      size="icon"
+                      variant="secondary"
+                      className="size-7"
+                      onClick={() => move(categoryIndex, -1)}
+                      aria-label="Subir item"
+                    >
+                      <ArrowUp className="size-3.5" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="secondary"
+                      className="size-7"
+                      onClick={() => move(categoryIndex, 1)}
+                      aria-label="Descer item"
+                    >
+                      <ArrowDown className="size-3.5" />
+                    </Button>
+                  </div>
                 </div>
                 <div className="space-y-3 p-4">
                   <div>
@@ -198,16 +373,21 @@ function CatalogPage() {
                     <label className="flex items-center gap-2 text-xs text-muted-foreground">
                       <Switch
                         checked={item.active}
-                        onCheckedChange={(checked) =>
-                          toggleActive.mutate({ id: item.id, active: checked })
+                        onCheckedChange={(value) =>
+                          toggleActive.mutate({ id: item.id, active: value })
                         }
                       />
                       {item.active ? "Visível" : "Oculto"}
                     </label>
-                    <Button variant="ghost" size="sm" onClick={() => setEditing(item)}>
-                      <Pencil className="mr-2 size-4" />
-                      Editar
-                    </Button>
+                    <div className="flex items-center">
+                      <Button variant="ghost" size="sm" onClick={() => duplicate.mutate(item)}>
+                        <CopyPlus className="size-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => setEditing(item)}>
+                        <Pencil className="mr-2 size-4" />
+                        Editar
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>

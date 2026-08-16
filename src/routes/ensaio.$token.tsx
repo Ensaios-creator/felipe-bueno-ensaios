@@ -99,7 +99,17 @@ function EnsaioPage() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["public-order", token] });
       setDraft(null);
-      toast.success("Tudo enviado para o estúdio!");
+      toast.success("Tudo enviado para o estúdio! Abrindo WhatsApp...");
+      if (query.data?.order) {
+        const url = whatsappLink(
+          STUDIO_WHATSAPP,
+          clientSendPhotosMessage({
+            clientName: query.data.order.clientName,
+            orderNumber: query.data.order.orderNumber,
+          }),
+        );
+        window.open(url, "_blank", "noopener,noreferrer");
+      }
     },
     onError: (error: Error) => toast.error(error.message),
   });

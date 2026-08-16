@@ -1,5 +1,5 @@
 /** Telefone do estúdio usado nos links de WhatsApp da cliente (formato internacional, só dígitos). */
-export const STUDIO_WHATSAPP = "5511999999999";
+export const STUDIO_WHATSAPP = "5537991377328";
 
 function digits(phone: string) {
   const only = phone.replace(/\D/g, "");

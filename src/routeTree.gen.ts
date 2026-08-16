@@ -15,6 +15,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as AuthenticatedAdminIndexRouteImport } from './routes/_authenticated/admin.index'
 import { Route as AuthenticatedAdminCatalogoRouteImport } from './routes/_authenticated/admin.catalogo'
+import { Route as AuthenticatedAdminPedidosOrderIdRouteImport } from './routes/_authenticated/admin.pedidos.$orderId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -46,6 +47,12 @@ const AuthenticatedAdminCatalogoRoute =
     path: '/catalogo',
     getParentRoute: () => AuthenticatedAdminRoute,
   } as any)
+const AuthenticatedAdminPedidosOrderIdRoute =
+  AuthenticatedAdminPedidosOrderIdRouteImport.update({
+    id: '/pedidos/$orderId',
+    path: '/pedidos/$orderId',
+    getParentRoute: () => AuthenticatedAdminRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -53,12 +60,14 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AuthenticatedAdminRouteWithChildren
   '/admin/catalogo': typeof AuthenticatedAdminCatalogoRoute
   '/admin/': typeof AuthenticatedAdminIndexRoute
+  '/admin/pedidos/$orderId': typeof AuthenticatedAdminPedidosOrderIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/admin/catalogo': typeof AuthenticatedAdminCatalogoRoute
   '/admin': typeof AuthenticatedAdminIndexRoute
+  '/admin/pedidos/$orderId': typeof AuthenticatedAdminPedidosOrderIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -68,12 +77,19 @@ export interface FileRoutesById {
   '/_authenticated/admin': typeof AuthenticatedAdminRouteWithChildren
   '/_authenticated/admin/catalogo': typeof AuthenticatedAdminCatalogoRoute
   '/_authenticated/admin/': typeof AuthenticatedAdminIndexRoute
+  '/_authenticated/admin/pedidos/$orderId': typeof AuthenticatedAdminPedidosOrderIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/admin' | '/admin/catalogo' | '/admin/'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/admin'
+    | '/admin/catalogo'
+    | '/admin/'
+    | '/admin/pedidos/$orderId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/admin/catalogo' | '/admin'
+  to: '/' | '/auth' | '/admin/catalogo' | '/admin' | '/admin/pedidos/$orderId'
   id:
     | '__root__'
     | '/'
@@ -82,6 +98,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin'
     | '/_authenticated/admin/catalogo'
     | '/_authenticated/admin/'
+    | '/_authenticated/admin/pedidos/$orderId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -134,17 +151,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminCatalogoRouteImport
       parentRoute: typeof AuthenticatedAdminRoute
     }
+    '/_authenticated/admin/pedidos/$orderId': {
+      id: '/_authenticated/admin/pedidos/$orderId'
+      path: '/pedidos/$orderId'
+      fullPath: '/admin/pedidos/$orderId'
+      preLoaderRoute: typeof AuthenticatedAdminPedidosOrderIdRouteImport
+      parentRoute: typeof AuthenticatedAdminRoute
+    }
   }
 }
 
 interface AuthenticatedAdminRouteChildren {
   AuthenticatedAdminCatalogoRoute: typeof AuthenticatedAdminCatalogoRoute
   AuthenticatedAdminIndexRoute: typeof AuthenticatedAdminIndexRoute
+  AuthenticatedAdminPedidosOrderIdRoute: typeof AuthenticatedAdminPedidosOrderIdRoute
 }
 
 const AuthenticatedAdminRouteChildren: AuthenticatedAdminRouteChildren = {
   AuthenticatedAdminCatalogoRoute: AuthenticatedAdminCatalogoRoute,
   AuthenticatedAdminIndexRoute: AuthenticatedAdminIndexRoute,
+  AuthenticatedAdminPedidosOrderIdRoute: AuthenticatedAdminPedidosOrderIdRoute,
 }
 
 const AuthenticatedAdminRouteWithChildren =

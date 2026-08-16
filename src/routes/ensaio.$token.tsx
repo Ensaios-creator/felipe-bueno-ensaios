@@ -29,6 +29,7 @@ import {
   savePublicOrder,
 } from "@/lib/public-order.functions";
 import { cn } from "@/lib/utils";
+import { clientSendPhotosMessage, STUDIO_WHATSAPP, whatsappLink } from "@/lib/whatsapp";
 
 export const Route = createFileRoute("/ensaio/$token")({
   ssr: false,

@@ -494,12 +494,35 @@ function OrderRowCard({
             {copied ? <Check className="mr-2 size-4" /> : <Copy className="mr-2 size-4" />}
             Copiar link
           </Button>
+          <Button asChild variant="outline" size="sm">
+            <a
+              href={whatsappLink(
+                order.client_phone,
+                order.submitted_at
+                  ? identityPhotosMessage({
+                      clientName: order.client_name,
+                      orderNumber: order.order_number,
+                    })
+                  : configuratorLinkMessage({
+                      clientName: order.client_name,
+                      orderNumber: order.order_number,
+                      link: `${window.location.origin}/ensaio/${order.public_token}`,
+                    }),
+              )}
+              target="_blank"
+              rel="noreferrer"
+            >
+              <MessageCircle className="mr-2 size-4" />
+              {order.submitted_at ? "Pedir fotos" : "Enviar link"}
+            </a>
+          </Button>
           <Button asChild size="sm" variant="ghost">
             <Link to="/admin/pedidos/$orderId" params={{ orderId: order.id }}>
               Ver briefing
             </Link>
           </Button>
         </div>
+
       </div>
     </div>
   );

@@ -457,22 +457,56 @@ function EnsaioPage() {
         ) : null}
 
         {step === "pose" ? (
-          <StepShell
-            eyebrow="Poses"
-            title={`Escolha até ${order.photoCount} poses`}
-            hint="A ordem que você tocar é a ordem das fotos. Só a pose muda entre elas."
-          >
-            <p className="mb-4 text-sm text-muted-foreground">
-              {(picked["pose"] ?? []).length} de {order.photoCount} escolhidas
-            </p>
-            <VisualGrid
-              multi
-              items={itemsOf("pose")}
-              selected={picked["pose"] ?? []}
-              onToggle={(id) => toggle("pose", id, true, order.photoCount)}
-            />
-          </StepShell>
+          (() => {
+            const chosen = (picked["pose"] ?? []).length;
+            const remaining = order.photoCount - chosen;
+            return (
+              <StepShell
+                eyebrow="Poses"
+                title={`Escolha até ${order.photoCount} poses`}
+                hint="A ordem que você tocar é a ordem das fotos. Só a pose muda entre elas."
+              >
+                <div className="mb-5 rounded-lg border border-border bg-card p-4">
+                  <div className="flex items-baseline justify-between">
+                    <p className="text-sm text-muted-foreground">
+                      {chosen} de {order.photoCount} escolhidas
+                    </p>
+                    <p className="font-display text-lg font-light">
+                      {remaining <= 0 ? "Completo" : `Faltam ${remaining}`}
+                    </p>
+                  </div>
+                  <div className="mt-3 h-px w-full bg-border">
+                    <div
+                      className="h-px bg-foreground transition-all duration-500"
+                      style={{
+                        width: `${Math.min(100, Math.round((chosen / Math.max(1, order.photoCount)) * 100))}%`,
+                      }}
+                    />
+                  </div>
+                  {remaining > 0 && chosen > 0 ? (
+                    <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                      Você pode enviar assim: as {remaining}{" "}
+                      {remaining === 1 ? "foto restante" : "fotos restantes"} serão variações
+                      naturais dentro do mesmo estilo.
+                    </p>
+                  ) : null}
+                  {remaining < 0 ? (
+                    <p className="mt-3 text-xs leading-relaxed text-destructive">
+                      Você escolheu mais poses do que o seu pacote de {order.photoCount} fotos.
+                    </p>
+                  ) : null}
+                </div>
+                <VisualGrid
+                  multi
+                  items={itemsOf("pose")}
+                  selected={picked["pose"] ?? []}
+                  onToggle={(id) => toggle("pose", id, true, order.photoCount)}
+                />
+              </StepShell>
+            );
+          })()
         ) : null}
+
 
         {step === "detalhes" ? (
           <StepShell

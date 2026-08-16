@@ -30,9 +30,11 @@ export const Route = createFileRoute("/api/public/ensaio-zip")({
         const files: Record<string, Uint8Array> = {};
 
         for (const item of items ?? []) {
-          const catalogItem = item.catalog_items as
-            | { code: string; name: string; image_url: string | null }
-            | null;
+          const catalogItem = item.catalog_items as {
+            code: string;
+            name: string;
+            image_url: string | null;
+          } | null;
           const path = catalogItem?.image_url;
           if (!path) continue;
 

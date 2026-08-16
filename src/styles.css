@@ -61,7 +61,8 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  --shadow-editorial: 0 1px 2px oklch(0.24 0.02 60 / 0.04), 0 12px 40px -18px oklch(0.24 0.02 60 / 0.22);
+  --shadow-editorial:
+    0 1px 2px oklch(0.24 0.02 60 / 0.04), 0 12px 40px -18px oklch(0.24 0.02 60 / 0.22);
   --shadow-lift: 0 2px 4px oklch(0.24 0.02 60 / 0.05), 0 24px 60px -24px oklch(0.24 0.02 60 / 0.3);
 }
 

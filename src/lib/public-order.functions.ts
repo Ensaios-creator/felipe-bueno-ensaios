@@ -42,7 +42,10 @@ export const getPublicOrder = createServerFn({ method: "GET" })
     }
 
     const [{ data: items }, { data: catalog }] = await Promise.all([
-      supabaseAdmin.from("order_items").select("catalog_item_id, role, position").eq("order_id", order.id),
+      supabaseAdmin
+        .from("order_items")
+        .select("catalog_item_id, role, position")
+        .eq("order_id", order.id),
       supabaseAdmin
         .from("catalog_items")
         .select("id, code, category, name, image_url, color, style, tags, ai_description")
@@ -51,7 +54,10 @@ export const getPublicOrder = createServerFn({ method: "GET" })
         .order("position"),
     ]);
 
-    const urlMap = await resolveImageUrls(supabaseAdmin, (catalog ?? []).map((c) => c.image_url));
+    const urlMap = await resolveImageUrls(
+      supabaseAdmin,
+      (catalog ?? []).map((c) => c.image_url),
+    );
 
     const selections: Record<string, string[]> = {};
     for (const item of (items ?? []).sort((a, b) => a.position - b.position)) {

@@ -18,7 +18,8 @@ export const Route = createFileRoute("/_authenticated/admin/pedidos/$orderId")({
       { title: "Briefing do pedido — Configurador de Ensaios" },
       {
         name: "description",
-        content: "Resumo estruturado do ensaio configurado pela cliente, pronto para gerar prompts.",
+        content:
+          "Resumo estruturado do ensaio configurado pela cliente, pronto para gerar prompts.",
       },
       { property: "og:title", content: "Briefing do pedido — Configurador de Ensaios" },
       {
@@ -213,7 +214,6 @@ function OrderDetailPage() {
           </Button>
         </div>
       ) : null}
-
 
       <div className="mb-8 flex flex-wrap gap-2">
         <Badge variant="secondary">{order.status}</Badge>

@@ -310,7 +310,10 @@ function CatalogPage() {
             const categoryIndex = inCategory.findIndex((row) => row.id === item.id);
             const checked = selected.includes(item.id);
             return (
-              <div key={item.id} className="overflow-hidden rounded-lg border border-border bg-card">
+              <div
+                key={item.id}
+                className="overflow-hidden rounded-lg border border-border bg-card"
+              >
                 <div className="relative flex aspect-[4/5] items-center justify-center bg-muted">
                   {src ? (
                     <img

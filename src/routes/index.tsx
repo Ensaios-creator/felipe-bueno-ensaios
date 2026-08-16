@@ -81,8 +81,8 @@ function HomePage() {
             Abra o endereço que o estúdio enviou
           </h2>
           <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted-foreground">
-            O link é pessoal e guarda suas escolhas automaticamente. Você pode fechar e voltar depois
-            de onde parou.
+            O link é pessoal e guarda suas escolhas automaticamente. Você pode fechar e voltar
+            depois de onde parou.
           </p>
         </section>
       </main>

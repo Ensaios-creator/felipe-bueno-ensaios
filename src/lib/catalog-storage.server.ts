@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/integrations/supabase/types";
 
 const SIGNED_URL_TTL = 60 * 60 * 12;
 
@@ -8,7 +9,7 @@ const SIGNED_URL_TTL = 60 * 60 * 12;
  * displayable URL.
  */
 export async function resolveImageUrls(
-  client: SupabaseClient<any, any, any>,
+  client: SupabaseClient<Database>,
   paths: (string | null)[],
 ): Promise<Record<string, string>> {
   const storagePaths = Array.from(

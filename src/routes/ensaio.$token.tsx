@@ -23,11 +23,7 @@ import {
   SESSION_TYPES,
 } from "@/lib/ensaio-options";
 import type { OrderConfigData } from "@/lib/ensaio-types";
-import {
-  confirmPublicOrder,
-  getPublicOrder,
-  savePublicOrder,
-} from "@/lib/public-order.functions";
+import { confirmPublicOrder, getPublicOrder, savePublicOrder } from "@/lib/public-order.functions";
 import { cn } from "@/lib/utils";
 import { clientSendPhotosMessage, STUDIO_WHATSAPP, whatsappLink } from "@/lib/whatsapp";
 
@@ -130,6 +126,18 @@ function EnsaioPage() {
     );
     return base;
   }, [config?.session_type]);
+
+  const [hasRestoredStep, setHasRestoredStep] = useState(false);
+  useEffect(() => {
+    if (
+      !hasRestoredStep &&
+      query.data?.config?.current_step !== undefined &&
+      query.data.config.current_step > 0
+    ) {
+      setStepIndex(Math.min(query.data.config.current_step, steps.length - 1));
+      setHasRestoredStep(true);
+    }
+  }, [hasRestoredStep, query.data?.config?.current_step, steps.length]);
 
   if (query.isLoading) {
     return <Centered>Abrindo seu ensaio...</Centered>;
@@ -467,57 +475,56 @@ function EnsaioPage() {
           </StepShell>
         ) : null}
 
-        {step === "pose" ? (
-          (() => {
-            const chosen = (picked["pose"] ?? []).length;
-            const remaining = order.photoCount - chosen;
-            return (
-              <StepShell
-                eyebrow="Poses"
-                title={`Escolha até ${order.photoCount} poses`}
-                hint="A ordem que você tocar é a ordem das fotos. Só a pose muda entre elas."
-              >
-                <div className="mb-5 rounded-lg border border-border bg-card p-4">
-                  <div className="flex items-baseline justify-between">
-                    <p className="text-sm text-muted-foreground">
-                      {chosen} de {order.photoCount} escolhidas
-                    </p>
-                    <p className="font-display text-lg font-light">
-                      {remaining <= 0 ? "Completo" : `Faltam ${remaining}`}
-                    </p>
+        {step === "pose"
+          ? (() => {
+              const chosen = (picked["pose"] ?? []).length;
+              const remaining = order.photoCount - chosen;
+              return (
+                <StepShell
+                  eyebrow="Poses"
+                  title={`Escolha até ${order.photoCount} poses`}
+                  hint="A ordem que você tocar é a ordem das fotos. Só a pose muda entre elas."
+                >
+                  <div className="mb-5 rounded-lg border border-border bg-card p-4">
+                    <div className="flex items-baseline justify-between">
+                      <p className="text-sm text-muted-foreground">
+                        {chosen} de {order.photoCount} escolhidas
+                      </p>
+                      <p className="font-display text-lg font-light">
+                        {remaining <= 0 ? "Completo" : `Faltam ${remaining}`}
+                      </p>
+                    </div>
+                    <div className="mt-3 h-px w-full bg-border">
+                      <div
+                        className="h-px bg-foreground transition-all duration-500"
+                        style={{
+                          width: `${Math.min(100, Math.round((chosen / Math.max(1, order.photoCount)) * 100))}%`,
+                        }}
+                      />
+                    </div>
+                    {remaining > 0 && chosen > 0 ? (
+                      <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+                        Você pode enviar assim: as {remaining}{" "}
+                        {remaining === 1 ? "foto restante" : "fotos restantes"} serão variações
+                        naturais dentro do mesmo estilo.
+                      </p>
+                    ) : null}
+                    {remaining < 0 ? (
+                      <p className="mt-3 text-xs leading-relaxed text-destructive">
+                        Você escolheu mais poses do que o seu pacote de {order.photoCount} fotos.
+                      </p>
+                    ) : null}
                   </div>
-                  <div className="mt-3 h-px w-full bg-border">
-                    <div
-                      className="h-px bg-foreground transition-all duration-500"
-                      style={{
-                        width: `${Math.min(100, Math.round((chosen / Math.max(1, order.photoCount)) * 100))}%`,
-                      }}
-                    />
-                  </div>
-                  {remaining > 0 && chosen > 0 ? (
-                    <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-                      Você pode enviar assim: as {remaining}{" "}
-                      {remaining === 1 ? "foto restante" : "fotos restantes"} serão variações
-                      naturais dentro do mesmo estilo.
-                    </p>
-                  ) : null}
-                  {remaining < 0 ? (
-                    <p className="mt-3 text-xs leading-relaxed text-destructive">
-                      Você escolheu mais poses do que o seu pacote de {order.photoCount} fotos.
-                    </p>
-                  ) : null}
-                </div>
-                <VisualGrid
-                  multi
-                  items={itemsOf("pose")}
-                  selected={picked["pose"] ?? []}
-                  onToggle={(id) => toggle("pose", id, true, order.photoCount)}
-                />
-              </StepShell>
-            );
-          })()
-        ) : null}
-
+                  <VisualGrid
+                    multi
+                    items={itemsOf("pose")}
+                    selected={picked["pose"] ?? []}
+                    onToggle={(id) => toggle("pose", id, true, order.photoCount)}
+                  />
+                </StepShell>
+              );
+            })()
+          : null}
 
         {step === "detalhes" ? (
           <StepShell
@@ -570,37 +577,100 @@ function EnsaioPage() {
           >
             <dl className="divide-y divide-border rounded-lg border border-border bg-card">
               {[
-                ["Tipo de ensaio", SESSION_TYPES.find((t) => t.value === config.session_type)?.label],
-                ["Fotos", `${order.photoCount}`],
-                [
-                  "Enquadramento",
-                  FRAMING_OPTIONS.find((f) => f.value === config.framing)?.label,
-                ],
-                ["Roupa", OUTFIT_MODES.find((o) => o.value === config.outfit_mode)?.label],
-                ["Maquiagem", MAKEUP_OPTIONS.find((m) => m.value === config.makeup)?.label],
-                ["Cabelo", HAIR_OPTIONS.find((h) => h.value === config.hair)?.label],
-                [
-                  "Look",
-                  catalog.find((item) => item.id === (picked["look"] ?? [])[0])?.name,
-                ],
-                [
-                  "Cenário",
-                  catalog.find((item) => item.id === (picked["cenario"] ?? [])[0])?.name,
-                ],
-                ["Luz", MOOD_OPTIONS.find((m) => m.value === config.lighting_mood)?.label],
-                [
-                  "Paleta",
-                  PALETTE_OPTIONS.find((p) => p.value === config.color_palette)?.label,
-                ],
-                ["Poses escolhidas", `${(picked["pose"] ?? []).length}`],
-              ].map(([label, value]) => (
-                <div key={label} className="flex items-baseline justify-between gap-6 px-4 py-3">
-                  <dt className="text-sm text-muted-foreground">{label}</dt>
-                  <dd className="text-right font-display text-lg font-light">
-                    {value || "Não escolhido"}
-                  </dd>
-                </div>
-              ))}
+                {
+                  label: "Tipo de ensaio",
+                  value: SESSION_TYPES.find((t) => t.value === config.session_type)?.label,
+                  stepId: "tipo" as StepId,
+                },
+                {
+                  label: "Fotos",
+                  value: `${order.photoCount}`,
+                  stepId: "boas-vindas" as StepId,
+                },
+                {
+                  label: "Enquadramento",
+                  value: FRAMING_OPTIONS.find((f) => f.value === config.framing)?.label,
+                  stepId: "essenciais" as StepId,
+                },
+                {
+                  label: "Roupa",
+                  value: OUTFIT_MODES.find((o) => o.value === config.outfit_mode)?.label,
+                  stepId: "essenciais" as StepId,
+                },
+                {
+                  label: "Maquiagem",
+                  value: MAKEUP_OPTIONS.find((m) => m.value === config.makeup)?.label,
+                  stepId: "essenciais" as StepId,
+                },
+                {
+                  label: "Cabelo",
+                  value: HAIR_OPTIONS.find((h) => h.value === config.hair)?.label,
+                  stepId: "essenciais" as StepId,
+                },
+                {
+                  label: "Look",
+                  value: catalog.find((item) => item.id === (picked["look"] ?? [])[0])?.name,
+                  stepId: "look" as StepId,
+                },
+                {
+                  label: "Cenário",
+                  value: catalog.find((item) => item.id === (picked["cenario"] ?? [])[0])?.name,
+                  stepId: "cenario" as StepId,
+                },
+                {
+                  label: "Luz",
+                  value: MOOD_OPTIONS.find((m) => m.value === config.lighting_mood)?.label,
+                  stepId: "iluminacao" as StepId,
+                },
+                {
+                  label: "Paleta",
+                  value: PALETTE_OPTIONS.find((p) => p.value === config.color_palette)?.label,
+                  stepId: "paleta" as StepId,
+                },
+                {
+                  label: "Acessórios",
+                  value:
+                    (picked["acessorio"] ?? []).length > 0
+                      ? `${(picked["acessorio"] ?? []).length} selecionado(s)`
+                      : "Nenhum",
+                  stepId: "acessorio" as StepId,
+                },
+                {
+                  label: "Poses escolhidas",
+                  value: `${(picked["pose"] ?? []).length} de ${order.photoCount}`,
+                  stepId: "pose" as StepId,
+                },
+              ].map(({ label, value, stepId }) => {
+                const targetIdx = steps.indexOf(stepId);
+                const canJump = !config.confirmed && targetIdx !== -1;
+                return (
+                  <div
+                    key={label}
+                    onClick={() => {
+                      if (canJump) {
+                        setStepIndex(targetIdx);
+                        patchConfig({ current_step: targetIdx });
+                      }
+                    }}
+                    className={cn(
+                      "flex items-baseline justify-between gap-6 px-4 py-3 transition-colors",
+                      canJump && "cursor-pointer hover:bg-secondary/60",
+                    )}
+                  >
+                    <dt className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <span>{label}</span>
+                      {canJump ? (
+                        <span className="text-[0.65rem] uppercase tracking-wider text-muted-foreground/60">
+                          (editar)
+                        </span>
+                      ) : null}
+                    </dt>
+                    <dd className="text-right font-display text-lg font-light">
+                      {value || "Não escolhido"}
+                    </dd>
+                  </div>
+                );
+              })}
             </dl>
 
             {!config.confirmed ? (
@@ -648,7 +718,6 @@ function EnsaioPage() {
                 </Button>
               </div>
             )}
-
           </StepShell>
         ) : null}
       </main>

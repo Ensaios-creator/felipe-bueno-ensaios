@@ -1,14 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import {
-  AlertTriangle,
-  Check,
-  Copy,
-  LayoutGrid,
-  List,
-  MessageCircle,
-  Plus,
-} from "lucide-react";
+import { AlertTriangle, Check, Copy, LayoutGrid, List, MessageCircle, Plus } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -36,11 +28,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import {
-  configuratorLinkMessage,
-  identityPhotosMessage,
-  whatsappLink,
-} from "@/lib/whatsapp";
+import { configuratorLinkMessage, identityPhotosMessage, whatsappLink } from "@/lib/whatsapp";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   head: () => ({
@@ -123,7 +111,10 @@ function OrdersPage() {
 
   const update = useMutation({
     mutationFn: async ({ id, patch }: { id: string; patch: Record<string, unknown> }) => {
-      const { error } = await supabase.from("orders").update(patch as never).eq("id", id);
+      const { error } = await supabase
+        .from("orders")
+        .update(patch as never)
+        .eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["orders"] }),
@@ -340,9 +331,7 @@ function OrdersPage() {
                       onDragEnd={() => setDragging(null)}
                       className={cn(
                         "cursor-grab rounded-md border bg-card p-4 active:cursor-grabbing",
-                        needsIdentityPhotos(order)
-                          ? "border-destructive/60"
-                          : "border-border",
+                        needsIdentityPhotos(order) ? "border-destructive/60" : "border-border",
                       )}
                     >
                       <p className="eyebrow">#{order.order_number}</p>
@@ -365,9 +354,7 @@ function OrdersPage() {
                         </Badge>
                       ) : null}
                       {needsIdentityPhotos(order) ? (
-                        <p className="mt-3 text-xs text-destructive">
-                          Sem fotos de identidade
-                        </p>
+                        <p className="mt-3 text-xs text-destructive">Sem fotos de identidade</p>
                       ) : null}
                     </div>
                   ))}
@@ -402,7 +389,9 @@ function OrderRowCard({
     <div
       className={cn(
         "rounded-lg border bg-card p-5 transition-colors",
-        alert ? "border-destructive/60 bg-destructive/5" : "border-border hover:border-foreground/25",
+        alert
+          ? "border-destructive/60 bg-destructive/5"
+          : "border-border hover:border-foreground/25",
       )}
     >
       <div className="flex flex-wrap items-start gap-x-6 gap-y-4">
@@ -535,7 +524,6 @@ function OrderRowCard({
             </Link>
           </Button>
         </div>
-
       </div>
     </div>
   );

@@ -72,9 +72,7 @@ export function buildSummarySections(params: {
           ? `\n\n(${remaining} ${remaining === 1 ? "foto restante" : "fotos restantes"}: variar naturalmente dentro do estilo acima)`
           : "");
 
-  const sections: SummarySection[] = [
-    { title: "PEDIDO", body: header },
-  ];
+  const sections: SummarySection[] = [{ title: "PEDIDO", body: header }];
 
   if (specific) sections.push({ title: "DETALHES DA CATEGORIA", body: specific });
 
@@ -86,7 +84,8 @@ export function buildSummarySections(params: {
     { title: "ACESSÓRIOS", body: describe(itemsOf(catalog, selections, "acessorio")) },
     {
       title: "PALETA DE CORES",
-      body: PALETTE_OPTIONS.find((p) => p.value === config.color_palette)?.label ?? "Não informado.",
+      body:
+        PALETTE_OPTIONS.find((p) => p.value === config.color_palette)?.label ?? "Não informado.",
     },
     { title: "ILUMINAÇÃO", body: describe(itemsOf(catalog, selections, "iluminacao")) },
     { title: "POSES (ações)", body: posesBody },
@@ -114,9 +113,7 @@ export function buildSummarySections(params: {
 }
 
 export function summaryToText(sections: SummarySection[]) {
-  return sections
-    .map((s, i) => (i === 0 ? s.body : `--- ${s.title} ---\n${s.body}`))
-    .join("\n\n");
+  return sections.map((s, i) => (i === 0 ? s.body : `--- ${s.title} ---\n${s.body}`)).join("\n\n");
 }
 
 export function referenceImages(

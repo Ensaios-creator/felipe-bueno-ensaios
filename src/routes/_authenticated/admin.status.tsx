@@ -51,9 +51,7 @@ function StatusPage() {
   const create = useMutation({
     mutationFn: async (label: string) => {
       const position = (statuses.data ?? []).length;
-      const { error } = await supabase
-        .from("order_status_options")
-        .insert({ label, position });
+      const { error } = await supabase.from("order_status_options").insert({ label, position });
       if (error) throw error;
     },
     onSuccess: async () => {
@@ -110,10 +108,7 @@ function StatusPage() {
   }
 
   return (
-    <AdminShell
-      eyebrow="Painel do estúdio"
-      title="Status de produção"
-    >
+    <AdminShell eyebrow="Painel do estúdio" title="Status de produção">
       <p className="mb-8 max-w-2xl text-sm text-muted-foreground">
         A ordem definida aqui é a ordem das colunas no Kanban de pedidos.
       </p>

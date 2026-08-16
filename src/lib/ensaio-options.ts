@@ -29,7 +29,11 @@ export const SESSION_TYPES = [
   { value: "casamento", label: "Casamento", hint: "Civil, gala ou pé na areia" },
   { value: "evento", label: "Evento especial", hint: "Halloween, Natal, Dia das Mães..." },
   { value: "gestante", label: "Gestante", hint: "A espera em imagens" },
-  { value: "corporativo", label: "Corporativo / Perfil profissional", hint: "Presença e credibilidade" },
+  {
+    value: "corporativo",
+    label: "Corporativo / Perfil profissional",
+    hint: "Presença e credibilidade",
+  },
   { value: "religioso", label: "Religioso / Espiritual", hint: "Serenidade e simbolismo" },
   { value: "sensual", label: "Sensual", hint: "Sugestivo e artístico" },
   { value: "outro", label: "Outro", hint: "Conte pra gente o que você quer" },
@@ -94,49 +98,149 @@ export type CategoryQuestion =
 
 export const CATEGORY_QUESTIONS: Record<string, CategoryQuestion[]> = {
   aniversario: [
-    { key: "idade", label: "Qual idade você vai completar?", type: "number", placeholder: "Ex: 27" },
+    {
+      key: "idade",
+      label: "Qual idade você vai completar?",
+      type: "number",
+      placeholder: "Ex: 27",
+    },
     { key: "mostrar_idade", label: "Pode mostrar a idade na foto?", type: "boolean" },
-    { key: "tema", label: "Tem um tema ou decoração em mente?", type: "text", placeholder: "Ex: jardim com velas" },
+    {
+      key: "tema",
+      label: "Tem um tema ou decoração em mente?",
+      type: "text",
+      placeholder: "Ex: jardim com velas",
+    },
     { key: "bolo", label: "O bolo com velas aparece nas fotos?", type: "boolean" },
-    { key: "pessoas", label: "Quantas pessoas aparecem nas fotos?", type: "number", placeholder: "Ex: 2" },
+    {
+      key: "pessoas",
+      label: "Quantas pessoas aparecem nas fotos?",
+      type: "number",
+      placeholder: "Ex: 2",
+    },
   ],
   estudio: [
-    { key: "fundo", label: "Fundo liso ou cenário elaborado?", type: "choice", options: ["Fundo liso", "Cenário elaborado"] },
-    { key: "estilo", label: "Qual estilo combina mais com você?", type: "choice", options: ["Editorial", "Clássico", "Moderno"] },
+    {
+      key: "fundo",
+      label: "Fundo liso ou cenário elaborado?",
+      type: "choice",
+      options: ["Fundo liso", "Cenário elaborado"],
+    },
+    {
+      key: "estilo",
+      label: "Qual estilo combina mais com você?",
+      type: "choice",
+      options: ["Editorial", "Clássico", "Moderno"],
+    },
   ],
   casal: [
-    { key: "proximidade", label: "Como vocês querem aparecer?", type: "choice", options: ["Mãos dadas", "Abraço", "Só o olhar", "Um pouco de cada"] },
-    { key: "roupas", label: "As roupas combinam ou contrastam?", type: "choice", options: ["Combinando", "Contrastando"] },
+    {
+      key: "proximidade",
+      label: "Como vocês querem aparecer?",
+      type: "choice",
+      options: ["Mãos dadas", "Abraço", "Só o olhar", "Um pouco de cada"],
+    },
+    {
+      key: "roupas",
+      label: "As roupas combinam ou contrastam?",
+      type: "choice",
+      options: ["Combinando", "Contrastando"],
+    },
     { key: "individuais", label: "Querem fotos individuais também?", type: "boolean" },
   ],
   casamento: [
-    { key: "traje", label: "Que tipo de traje?", type: "choice", options: ["Civil", "Gala", "Praia"] },
+    {
+      key: "traje",
+      label: "Que tipo de traje?",
+      type: "choice",
+      options: ["Civil", "Gala", "Praia"],
+    },
     { key: "veu_buque", label: "Véu e buquê aparecem?", type: "boolean" },
-    { key: "ambiente", label: "Ambiente interno ou externo?", type: "choice", options: ["Interno", "Externo"] },
+    {
+      key: "ambiente",
+      label: "Ambiente interno ou externo?",
+      type: "choice",
+      options: ["Interno", "Externo"],
+    },
   ],
   evento: [
-    { key: "ocasiao", label: "Qual é a data ou ocasião?", type: "text", placeholder: "Ex: Natal, Halloween, Dia das Mães" },
-    { key: "elementos", label: "Algum elemento típico precisa aparecer?", type: "text", placeholder: "Ex: árvore de Natal, abóboras" },
+    {
+      key: "ocasiao",
+      label: "Qual é a data ou ocasião?",
+      type: "text",
+      placeholder: "Ex: Natal, Halloween, Dia das Mães",
+    },
+    {
+      key: "elementos",
+      label: "Algum elemento típico precisa aparecer?",
+      type: "text",
+      placeholder: "Ex: árvore de Natal, abóboras",
+    },
   ],
   gestante: [
-    { key: "semanas", label: "De quantas semanas você está?", type: "number", placeholder: "Ex: 32" },
+    {
+      key: "semanas",
+      label: "De quantas semanas você está?",
+      type: "number",
+      placeholder: "Ex: 32",
+    },
     { key: "barriga", label: "A barriga aparece à mostra?", type: "boolean" },
-    { key: "acompanhado", label: "Alguém aparece com você?", type: "text", placeholder: "Ex: meu marido, minha filha" },
+    {
+      key: "acompanhado",
+      label: "Alguém aparece com você?",
+      type: "text",
+      placeholder: "Ex: meu marido, minha filha",
+    },
   ],
   corporativo: [
-    { key: "uso", label: "Onde essas fotos vão ser usadas?", type: "choice", options: ["LinkedIn / perfil", "Site da empresa", "Material de divulgação", "Todos"] },
-    { key: "formalidade", label: "Quão formal deve ser?", type: "choice", options: ["Bem formal", "Elegante mas leve", "Descontraído"] },
+    {
+      key: "uso",
+      label: "Onde essas fotos vão ser usadas?",
+      type: "choice",
+      options: ["LinkedIn / perfil", "Site da empresa", "Material de divulgação", "Todos"],
+    },
+    {
+      key: "formalidade",
+      label: "Quão formal deve ser?",
+      type: "choice",
+      options: ["Bem formal", "Elegante mas leve", "Descontraído"],
+    },
   ],
   religioso: [
-    { key: "ocasiao", label: "Qual é a ocasião?", type: "text", placeholder: "Ex: batizado, primeira comunhão" },
-    { key: "simbolos", label: "Algum símbolo precisa aparecer?", type: "text", placeholder: "Ex: terço, bíblia, véu" },
+    {
+      key: "ocasiao",
+      label: "Qual é a ocasião?",
+      type: "text",
+      placeholder: "Ex: batizado, primeira comunhão",
+    },
+    {
+      key: "simbolos",
+      label: "Algum símbolo precisa aparecer?",
+      type: "text",
+      placeholder: "Ex: terço, bíblia, véu",
+    },
   ],
   sensual: [
-    { key: "intensidade", label: "Quanto de ousadia você quer?", type: "choice", options: ["Bem discreto", "Sugestivo", "Mais ousado"] },
-    { key: "ambiente", label: "Onde você imagina as fotos?", type: "choice", options: ["Quarto", "Estúdio", "Ao ar livre"] },
+    {
+      key: "intensidade",
+      label: "Quanto de ousadia você quer?",
+      type: "choice",
+      options: ["Bem discreto", "Sugestivo", "Mais ousado"],
+    },
+    {
+      key: "ambiente",
+      label: "Onde você imagina as fotos?",
+      type: "choice",
+      options: ["Quarto", "Estúdio", "Ao ar livre"],
+    },
   ],
   outro: [
-    { key: "descricao", label: "Descreva o ensaio que você imagina", type: "text", placeholder: "Conte com suas palavras" },
+    {
+      key: "descricao",
+      label: "Descreva o ensaio que você imagina",
+      type: "text",
+      placeholder: "Conte com suas palavras",
+    },
   ],
 };
 

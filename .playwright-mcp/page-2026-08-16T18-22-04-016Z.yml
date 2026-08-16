@@ -1,15 +1,15 @@
 - generic [active] [ref=f3e1]:
-  - link "Pular para a caixa de texto do chat" [ref=f3e2] [cursor=pointer]:
-    - /url: "#chatinput"
-  - region "Cookie banner" [ref=f3e3]:
-    - generic [ref=f3e5]:
-      - text: We use cookies to enhance your development experience and keep your data secure.
-      - link "Privacy Policy" [ref=f3e6] [cursor=pointer]:
-        - /url: /pt-br/privacy
-    - generic [ref=f3e7]:
-      - button "Accept all" [ref=f3e8] [cursor=pointer]
-      - generic [ref=f3e11]:
-        - button "Manage preferences" [ref=f3e12] [cursor=pointer]
-        - button "Reject all" [ref=f3e15] [cursor=pointer]
-  - navigation [ref=f3e21]:
-    - img "Lovable" [ref=f3e25]
+    - link "Pular para a caixa de texto do chat" [ref=f3e2] [cursor=pointer]:
+        - /url: "#chatinput"
+    - region "Cookie banner" [ref=f3e3]:
+        - generic [ref=f3e5]:
+            - text: We use cookies to enhance your development experience and keep your data secure.
+            - link "Privacy Policy" [ref=f3e6] [cursor=pointer]:
+                - /url: /pt-br/privacy
+        - generic [ref=f3e7]:
+            - button "Accept all" [ref=f3e8] [cursor=pointer]
+            - generic [ref=f3e11]:
+                - button "Manage preferences" [ref=f3e12] [cursor=pointer]
+                - button "Reject all" [ref=f3e15] [cursor=pointer]
+    - navigation [ref=f3e21]:
+        - img "Lovable" [ref=f3e25]

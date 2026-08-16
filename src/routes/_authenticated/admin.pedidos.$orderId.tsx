@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { AlertTriangle, ArrowLeft, Check, Copy, Download } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, Copy, Download, MessageCircle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 

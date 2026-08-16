@@ -115,7 +115,7 @@ export const savePublicOrder = createServerFn({ method: "POST" })
 
     const { data: order } = await supabaseAdmin
       .from("orders")
-      .select("id, confirmed:id")
+      .select("id")
       .eq("public_token", data.token)
       .maybeSingle();
     if (!order) throw new Error("Pedido não encontrado.");
@@ -141,7 +141,8 @@ export const savePublicOrder = createServerFn({ method: "POST" })
 
     const { error } = await supabaseAdmin
       .from("order_configs")
-      .upsert(patch, { onConflict: "order_id" });
+      .upsert(patch as never, { onConflict: "order_id" });
+
     if (error) throw new Error(error.message);
 
     if (data.selections) {

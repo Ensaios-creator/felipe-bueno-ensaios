@@ -1,10 +1,13 @@
 import { useNavigate } from "@tanstack/react-router";
 import {
+  AlertCircle,
+  Activity,
   Check,
   Eye,
   EyeOff,
   ExternalLink,
   KeyRound,
+  Loader2,
   Lock,
   LogOut,
   Mail,
@@ -12,10 +15,13 @@ import {
   Moon,
   Paintbrush,
   Phone,
+  Radio,
+  RefreshCw,
   ShieldCheck,
   Sparkles,
   Sun,
   User,
+  Zap,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -33,9 +39,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
-import { formatPhoneNumber, useStudioSettings } from "@/lib/studio-settings";
+import { AiProvider, formatPhoneNumber, useStudioSettings } from "@/lib/studio-settings";
 import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import {
+  ProviderHealth,
+  checkAllProvidersHealth,
+  checkProviderHealth,
+  testAiConnection,
+} from "@/lib/vision-ai";
 import { whatsappLink } from "@/lib/whatsapp";
 
 export function AdminProfileDialog({
@@ -62,6 +74,27 @@ export function AdminProfileDialog({
   const [whatsappNumber, setWhatsappNumber] = useState(settings.whatsappNumber);
   const [savingSettings, setSavingSettings] = useState(false);
 
+  // AI Settings State
+  const [aiProvider, setAiProvider] = useState<AiProvider>(settings.aiProvider);
+  const [groqApiKey, setGroqApiKey] = useState(settings.groqApiKey);
+  const [geminiApiKey, setGeminiApiKey] = useState(settings.geminiApiKey);
+  const [openrouterApiKey, setOpenrouterApiKey] = useState(settings.openrouterApiKey);
+  const [showGroqKey, setShowGroqKey] = useState(false);
+  const [showGeminiKey, setShowGeminiKey] = useState(false);
+  const [showOpenrouterKey, setShowOpenrouterKey] = useState(false);
+  const [testingAi, setTestingAi] = useState(false);
+  const [savingAi, setSavingAi] = useState(false);
+
+  // Health Diagnostics State
+  const [healthMap, setHealthMap] = useState<
+    Record<AiProvider, ProviderHealth | { status: "idle" | "checking" }>
+  >({
+    groq: { status: "idle" },
+    gemini: { status: "idle" },
+    openrouter: { status: "idle" },
+  });
+  const [checkingHealth, setCheckingHealth] = useState(false);
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data.user?.email) {
@@ -74,7 +107,45 @@ export function AdminProfileDialog({
   useEffect(() => {
     setStudioName(settings.studioName);
     setWhatsappNumber(settings.whatsappNumber);
+    setAiProvider(settings.aiProvider);
+    setGroqApiKey(settings.groqApiKey);
+    setGeminiApiKey(settings.geminiApiKey);
+    setOpenrouterApiKey(settings.openrouterApiKey);
   }, [settings]);
+
+  // Executa diagnóstico automático quando o modal é aberto
+  useEffect(() => {
+    if (open) {
+      runDiagnostics();
+    }
+  }, [open]);
+
+  async function runDiagnostics(overrideSettings?: {
+    groqApiKey?: string;
+    geminiApiKey?: string;
+    openrouterApiKey?: string;
+  }) {
+    setCheckingHealth(true);
+    setHealthMap({
+      groq: { status: "checking" },
+      gemini: { status: "checking" },
+      openrouter: { status: "checking" },
+    });
+
+    try {
+      const results = await checkAllProvidersHealth({
+        ...settings,
+        groqApiKey: overrideSettings?.groqApiKey ?? groqApiKey,
+        geminiApiKey: overrideSettings?.geminiApiKey ?? geminiApiKey,
+        openrouterApiKey: overrideSettings?.openrouterApiKey ?? openrouterApiKey,
+      });
+      setHealthMap(results);
+    } catch {
+      // ignore
+    } finally {
+      setCheckingHealth(false);
+    }
+  }
 
   async function handleUpdateCredentials(e: React.FormEvent) {
     e.preventDefault();
@@ -146,6 +217,63 @@ export function AdminProfileDialog({
     }
   }
 
+  async function handleSaveAiSettings(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    setSavingAi(true);
+    try {
+      await saveSettings({
+        aiProvider,
+        groqApiKey: groqApiKey.trim(),
+        geminiApiKey: geminiApiKey.trim(),
+        openrouterApiKey: openrouterApiKey.trim(),
+      });
+      toast.success("Configurações de Inteligência Artificial salvas!");
+      // Roda novo diagnóstico com as chaves salvas
+      runDiagnostics({
+        groqApiKey: groqApiKey.trim(),
+        geminiApiKey: geminiApiKey.trim(),
+        openrouterApiKey: openrouterApiKey.trim(),
+      });
+    } catch (err) {
+      toast.error("Erro ao salvar configurações de IA.");
+    } finally {
+      setSavingAi(false);
+    }
+  }
+
+  async function handleTestActiveAi() {
+    const key =
+      aiProvider === "groq"
+        ? groqApiKey
+        : aiProvider === "gemini"
+          ? geminiApiKey
+          : openrouterApiKey;
+
+    if (!key.trim()) {
+      toast.error(`Informe a chave de API para o provedor ${aiProvider.toUpperCase()} antes de testar.`);
+      return;
+    }
+
+    setTestingAi(true);
+    const toastId = toast.loading(`Diagnosticando ${aiProvider.toUpperCase()}...`);
+    try {
+      const res = await checkProviderHealth(aiProvider, key);
+      toast.dismiss(toastId);
+      setHealthMap((prev) => ({ ...prev, [aiProvider]: res }));
+
+      if (res.status === "online") {
+        toast.success(`🟢 ${aiProvider.toUpperCase()}: ${res.message}!`);
+      } else {
+        toast.error(`🔴 ${aiProvider.toUpperCase()}: ${res.message}`);
+      }
+    } catch (err) {
+      toast.dismiss(toastId);
+      toast.error(err instanceof Error ? err.message : "Falha no teste de conexão.");
+    } finally {
+      setTestingAi(false);
+    }
+  }
+
   async function handleSignOut() {
     await supabase.auth.signOut();
     toast.success("Sessão encerrada com segurança.");
@@ -153,9 +281,64 @@ export function AdminProfileDialog({
     navigate({ to: "/auth" });
   }
 
+  // Renderizador de Badge Animado de Status do Provedor
+  function renderProviderStatusBadge(provider: AiProvider) {
+    const health = healthMap[provider];
+
+    if (!health || health.status === "idle" || health.status === "checking") {
+      return (
+        <div className="flex items-center gap-1 rounded-full bg-secondary/80 border border-border px-2 py-0.5 text-[0.62rem] text-muted-foreground">
+          <Loader2 className="size-2.5 animate-spin text-amber-500" />
+          <span>Verificando...</span>
+        </div>
+      );
+    }
+
+    if (health.status === "online") {
+      return (
+        <div className="flex items-center gap-1.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 text-[0.62rem] font-medium text-emerald-600 dark:text-emerald-400">
+          <span className="relative flex size-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex size-2 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.8)]"></span>
+          </span>
+          <span>Online ({health.latencyMs}ms)</span>
+        </div>
+      );
+    }
+
+    if (health.status === "unconfigured") {
+      return (
+        <div className="flex items-center gap-1 rounded-full bg-muted/60 border border-border/60 px-2 py-0.5 text-[0.62rem] text-muted-foreground">
+          <span className="size-1.5 rounded-full bg-muted-foreground/50" />
+          <span>Sem chave</span>
+        </div>
+      );
+    }
+
+    // Erros (Rate limit, Chave inválida, Offline)
+    const label =
+      health.status === "rate_limited"
+        ? "Limite Excedido"
+        : health.status === "invalid_key"
+          ? "Chave Inválida"
+          : health.status === "model_unavailable"
+            ? "Indisponível"
+            : "Falha / Erro";
+
+    return (
+      <div className="flex items-center gap-1.5 rounded-full bg-rose-500/15 border border-rose-500/30 px-2 py-0.5 text-[0.62rem] font-medium text-rose-600 dark:text-rose-400">
+        <span className="relative flex size-2">
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75"></span>
+          <span className="relative inline-flex size-2 rounded-full bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.8)]"></span>
+        </span>
+        <span>{label}</span>
+      </div>
+    );
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto">
+      <DialogContent className="max-h-[92vh] max-w-xl overflow-y-auto">
         <DialogHeader>
           <div className="flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-full bg-secondary">
@@ -166,14 +349,14 @@ export function AdminProfileDialog({
                 Perfil & Configurações
               </DialogTitle>
               <DialogDescription className="text-xs">
-                Gerencie seus dados de acesso, preferências do estúdio e segurança.
+                Gerencie acesso, WhatsApp, motor de IA e preferências visuais do estúdio.
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
         <Tabs defaultValue="acesso" className="mt-2">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="acesso" className="gap-1.5 text-xs">
               <KeyRound className="size-3.5" />
               Acesso
@@ -181,6 +364,10 @@ export function AdminProfileDialog({
             <TabsTrigger value="estudio" className="gap-1.5 text-xs">
               <MessageCircle className="size-3.5" />
               WhatsApp
+            </TabsTrigger>
+            <TabsTrigger value="ia" className="gap-1.5 text-xs">
+              <Sparkles className="size-3.5 text-amber-500" />
+              IA & Visão
             </TabsTrigger>
             <TabsTrigger value="aparencia" className="gap-1.5 text-xs">
               <Paintbrush className="size-3.5" />
@@ -331,7 +518,290 @@ export function AdminProfileDialog({
             </form>
           </TabsContent>
 
-          {/* ── ABA 3: APARÊNCIA ───────────────────────────────────────────── */}
+          {/* ── ABA 3: INTELIGÊNCIA ARTIFICIAL (MULTI-PROVEDOR & STATUS) ─────── */}
+          <TabsContent value="ia" className="mt-4 space-y-5">
+            <form onSubmit={handleSaveAiSettings} className="space-y-5">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <Label className="text-xs font-medium">Provedor de Visão Ativo & Saúde dos Motores</Label>
+                  <button
+                    type="button"
+                    disabled={checkingHealth}
+                    onClick={() => runDiagnostics()}
+                    className="inline-flex items-center gap-1 text-[0.7rem] text-amber-600 dark:text-amber-400 hover:underline disabled:opacity-50"
+                  >
+                    <RefreshCw className={cn("size-3", checkingHealth && "animate-spin")} />
+                    <span>{checkingHealth ? "Diagnosticando..." : "Atualizar Status"}</span>
+                  </button>
+                </div>
+                <p className="text-[0.72rem] text-muted-foreground mb-3">
+                  Escolha o motor prioritário. Indicadores verdes mostram que o serviço está operacional; vermelhos indicam falhas com a causa detalhada.
+                </p>
+
+                <div className="grid grid-cols-3 gap-2.5">
+                  {/* Option 1: Groq */}
+                  <button
+                    type="button"
+                    onClick={() => setAiProvider("groq")}
+                    className={cn(
+                      "flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center transition-all relative overflow-hidden",
+                      aiProvider === "groq"
+                        ? "border-foreground bg-secondary ring-1 ring-foreground"
+                        : "border-border bg-card/60 opacity-80 hover:opacity-100",
+                    )}
+                  >
+                    <div className="flex size-7 items-center justify-center rounded-full bg-amber-500/15 text-amber-500">
+                      <Zap className="size-4" />
+                    </div>
+                    <div>
+                      <p className="font-display text-sm font-medium">Groq</p>
+                      <p className="text-[0.62rem] text-muted-foreground">Llama 3.2 Vision</p>
+                    </div>
+
+                    {/* Status Badge Animado */}
+                    {renderProviderStatusBadge("groq")}
+
+                    {aiProvider === "groq" && (
+                      <div className="absolute top-1.5 right-1.5">
+                        <Check className="size-3.5 text-foreground" />
+                      </div>
+                    )}
+                  </button>
+
+                  {/* Option 2: Gemini */}
+                  <button
+                    type="button"
+                    onClick={() => setAiProvider("gemini")}
+                    className={cn(
+                      "flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center transition-all relative overflow-hidden",
+                      aiProvider === "gemini"
+                        ? "border-foreground bg-secondary ring-1 ring-foreground"
+                        : "border-border bg-card/60 opacity-80 hover:opacity-100",
+                    )}
+                  >
+                    <div className="flex size-7 items-center justify-center rounded-full bg-blue-500/15 text-blue-500">
+                      <Sparkles className="size-4" />
+                    </div>
+                    <div>
+                      <p className="font-display text-sm font-medium">Gemini</p>
+                      <p className="text-[0.62rem] text-muted-foreground">2.0 / 1.5 Flash</p>
+                    </div>
+
+                    {/* Status Badge Animado */}
+                    {renderProviderStatusBadge("gemini")}
+
+                    {aiProvider === "gemini" && (
+                      <div className="absolute top-1.5 right-1.5">
+                        <Check className="size-3.5 text-foreground" />
+                      </div>
+                    )}
+                  </button>
+
+                  {/* Option 3: OpenRouter */}
+                  <button
+                    type="button"
+                    onClick={() => setAiProvider("openrouter")}
+                    className={cn(
+                      "flex flex-col items-center gap-1.5 rounded-xl border p-3 text-center transition-all relative overflow-hidden",
+                      aiProvider === "openrouter"
+                        ? "border-foreground bg-secondary ring-1 ring-foreground"
+                        : "border-border bg-card/60 opacity-80 hover:opacity-100",
+                    )}
+                  >
+                    <div className="flex size-7 items-center justify-center rounded-full bg-purple-500/15 text-purple-500">
+                      <Radio className="size-4" />
+                    </div>
+                    <div>
+                      <p className="font-display text-sm font-medium">OpenRouter</p>
+                      <p className="text-[0.62rem] text-muted-foreground">Modelos Free / Open</p>
+                    </div>
+
+                    {/* Status Badge Animado */}
+                    {renderProviderStatusBadge("openrouter")}
+
+                    {aiProvider === "openrouter" && (
+                      <div className="absolute top-1.5 right-1.5">
+                        <Check className="size-3.5 text-foreground" />
+                      </div>
+                    )}
+                  </button>
+                </div>
+
+                {/* Caixa Informativa de Diagnóstico Detalhado */}
+                {(() => {
+                  const activeHealth = healthMap[aiProvider];
+                  if (!activeHealth || activeHealth.status === "idle" || activeHealth.status === "checking") {
+                    return null;
+                  }
+
+                  if (activeHealth.status === "online") {
+                    return (
+                      <div className="mt-3 flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-2.5 text-xs text-emerald-700 dark:text-emerald-300">
+                        <Activity className="size-4 shrink-0 text-emerald-500" />
+                        <span>
+                          <strong>{aiProvider.toUpperCase()} operacional:</strong> {activeHealth.message}.{" "}
+                          {activeHealth.detail}
+                        </span>
+                      </div>
+                    );
+                  }
+
+                  if (activeHealth.status === "rate_limited") {
+                    return (
+                      <div className="mt-3 flex items-start gap-2 rounded-lg border border-rose-500/40 bg-rose-500/10 p-2.5 text-xs text-rose-700 dark:text-rose-300">
+                        <AlertCircle className="size-4 shrink-0 text-rose-500 mt-0.5" />
+                        <div>
+                          <p className="font-semibold">⚠️ Limite de Requisições / Cota Excedida no {aiProvider.toUpperCase()}</p>
+                          <p className="mt-0.5 text-[0.72rem] opacity-90 leading-relaxed">
+                            {activeHealth.detail || "Sua conta atingiu a cota temporária do provedor."} Durante uploads, o sistema usará os outros provedores configurados como contingência automática.
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  if (activeHealth.status === "invalid_key") {
+                    return (
+                      <div className="mt-3 flex items-start gap-2 rounded-lg border border-rose-500/40 bg-rose-500/10 p-2.5 text-xs text-rose-700 dark:text-rose-300">
+                        <AlertCircle className="size-4 shrink-0 text-rose-500 mt-0.5" />
+                        <div>
+                          <p className="font-semibold">🔴 Chave de API Inválida ({aiProvider.toUpperCase()})</p>
+                          <p className="mt-0.5 text-[0.72rem] opacity-90 leading-relaxed">
+                            A chave informada foi rejeitada ou expirou. Por favor, confira o campo de chave abaixo e salve.
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="mt-3 flex items-start gap-2 rounded-lg border border-rose-500/40 bg-rose-500/10 p-2.5 text-xs text-rose-700 dark:text-rose-300">
+                      <AlertCircle className="size-4 shrink-0 text-rose-500 mt-0.5" />
+                      <div>
+                        <p className="font-semibold">Falha ao conectar com {aiProvider.toUpperCase()}</p>
+                        <p className="mt-0.5 text-[0.72rem] opacity-90 leading-relaxed">
+                          {activeHealth.message} — {activeHealth.detail}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Chaves de API */}
+              <div className="space-y-3.5 border-t border-border pt-3.5">
+                {/* Groq Key */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="groq-key" className="text-xs font-medium flex items-center gap-1.5">
+                      <Zap className="size-3 text-amber-500" />
+                      Chave API Groq (gsk_...)
+                    </Label>
+                    <span className="text-[0.65rem] text-muted-foreground">Llama 3.2 11B/90B</span>
+                  </div>
+                  <div className="relative">
+                    <Input
+                      id="groq-key"
+                      type={showGroqKey ? "text" : "password"}
+                      value={groqApiKey}
+                      onChange={(e) => setGroqApiKey(e.target.value)}
+                      placeholder="gsk_..."
+                      className="pr-9 text-xs font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowGroqKey(!showGroqKey)}
+                      className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
+                    >
+                      {showGroqKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Gemini Key */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="gemini-key" className="text-xs font-medium flex items-center gap-1.5">
+                      <Sparkles className="size-3 text-blue-500" />
+                      Chave API Google Gemini
+                    </Label>
+                    <span className="text-[0.65rem] text-muted-foreground">Gemini 2.0 / 1.5 Flash</span>
+                  </div>
+                  <div className="relative">
+                    <Input
+                      id="gemini-key"
+                      type={showGeminiKey ? "text" : "password"}
+                      value={geminiApiKey}
+                      onChange={(e) => setGeminiApiKey(e.target.value)}
+                      placeholder="Chave do Google AI Studio"
+                      className="pr-9 text-xs font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowGeminiKey(!showGeminiKey)}
+                      className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
+                    >
+                      {showGeminiKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* OpenRouter Key */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="openrouter-key" className="text-xs font-medium flex items-center gap-1.5">
+                      <Radio className="size-3 text-purple-500" />
+                      Chave API OpenRouter (sk-or-v1-...)
+                    </Label>
+                    <span className="text-[0.65rem] text-muted-foreground">Modelos Free</span>
+                  </div>
+                  <div className="relative">
+                    <Input
+                      id="openrouter-key"
+                      type={showOpenrouterKey ? "text" : "password"}
+                      value={openrouterApiKey}
+                      onChange={(e) => setOpenrouterApiKey(e.target.value)}
+                      placeholder="sk-or-v1-..."
+                      className="pr-9 text-xs font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowOpenrouterKey(!showOpenrouterKey)}
+                      className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
+                    >
+                      {showOpenrouterKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Botões de Ação */}
+              <div className="flex items-center gap-2 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={testingAi || checkingHealth}
+                  onClick={handleTestActiveAi}
+                  className="flex-1 gap-1.5 text-xs"
+                >
+                  <Zap className="size-3.5 text-amber-500" />
+                  {testingAi ? "Testando..." : `Diagnosticar ${aiProvider.toUpperCase()}`}
+                </Button>
+
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={savingAi}
+                  className="flex-1 text-xs"
+                >
+                  {savingAi ? "Salvando..." : "Salvar Configurações de IA"}
+                </Button>
+              </div>
+            </form>
+          </TabsContent>
+
+          {/* ── ABA 4: APARÊNCIA ───────────────────────────────────────────── */}
           <TabsContent value="aparencia" className="mt-4 space-y-4">
             <div>
               <Label className="text-xs font-medium">Tema da Interface</Label>
@@ -404,3 +874,5 @@ export function AdminProfileDialog({
     </Dialog>
   );
 }
+
+

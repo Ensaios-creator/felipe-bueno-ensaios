@@ -10,12 +10,15 @@ import {
   Filter,
   ImageIcon,
   Layers,
+  Loader2,
   Pencil,
   Plus,
+  Radio,
   Sparkles,
   Trash2,
   UploadCloud,
   X,
+  Zap,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -58,7 +61,9 @@ import {
   SESSION_TYPES,
 } from "@/lib/ensaio-options";
 import { getPublicCatalogImageUrl } from "@/lib/public-order-service";
+import { useStudioSettings } from "@/lib/studio-settings";
 import { cn } from "@/lib/utils";
+import { classifyCatalogImage } from "@/lib/vision-ai";
 
 export const Route = createFileRoute("/_authenticated/admin/catalogo")({
   head: () => ({
@@ -791,10 +796,12 @@ function ItemDialog({
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
+  const { settings } = useStudioSettings();
   const [form, setForm] = useState(EMPTY_FORM);
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [analyzingAi, setAnalyzingAi] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
 
   useEffect(() => {
@@ -803,6 +810,10 @@ function ItemDialog({
       if (initialFile) {
         setFile(initialFile);
         setPreviewUrl(URL.createObjectURL(initialFile));
+        // Auto-analisa com IA se for nova foto colada
+        if (!item.id) {
+          analyzeWithAi(initialFile);
+        }
       } else {
         setFile(null);
         setPreviewUrl(item.image_url ? getPublicCatalogImageUrl(item.image_url) : null);
@@ -826,6 +837,7 @@ function ItemDialog({
             setFile(pasted);
             setPreviewUrl(URL.createObjectURL(pasted));
             toast.success("✓ Imagem colada da área de transferência!");
+            analyzeWithAi(pasted);
             break;
           }
         }
@@ -834,13 +846,55 @@ function ItemDialog({
 
     window.addEventListener("paste", handleDialogPaste);
     return () => window.removeEventListener("paste", handleDialogPaste);
-  }, [item]);
+  }, [item, settings]);
+
+  async function analyzeWithAi(customFile?: File | null, customUrl?: string | null) {
+    const targetFile = customFile || file;
+    const targetUrl = customUrl || previewUrl || form.image_url;
+    if (!targetFile && !targetUrl) {
+      toast.info("Selecione ou cole uma foto antes de analisar.");
+      return;
+    }
+
+    setAnalyzingAi(true);
+    const toastId = toast.loading(`Analisando imagem com ${settings.aiProvider.toUpperCase()}...`);
+    try {
+      const result = await classifyCatalogImage({
+        image: targetFile || targetUrl!,
+        settings,
+      });
+
+      setForm((prev) => ({
+        ...prev,
+        session_types: result.session_types,
+        people_count: result.people_count,
+        gender: result.gender,
+        ambiance: result.ambiance,
+        vibe: result.vibe,
+        style: result.style || result.vibe,
+        has_cake: result.has_cake,
+        has_age_number: result.has_age_number,
+        tags: result.tags,
+      }));
+
+      toast.dismiss(toastId);
+      toast.success(`✓ Imagem classificada com sucesso pela IA (${settings.aiProvider.toUpperCase()})!`);
+    } catch (err) {
+      toast.dismiss(toastId);
+      toast.error(err instanceof Error ? err.message : "Erro ao analisar com IA.");
+    } finally {
+      setAnalyzingAi(false);
+    }
+  }
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const selectedFile = e.target.files?.[0] ?? null;
     if (selectedFile) {
       setFile(selectedFile);
       setPreviewUrl(URL.createObjectURL(selectedFile));
+      if (!form.id) {
+        analyzeWithAi(selectedFile);
+      }
     }
   }
 
@@ -851,6 +905,9 @@ function ItemDialog({
     if (droppedFile && droppedFile.type.startsWith("image/")) {
       setFile(droppedFile);
       setPreviewUrl(URL.createObjectURL(droppedFile));
+      if (!form.id) {
+        analyzeWithAi(droppedFile);
+      }
     }
   }
 
@@ -865,6 +922,7 @@ function ItemDialog({
           setFile(pastedFile);
           setPreviewUrl(URL.createObjectURL(pastedFile));
           toast.success("✓ Imagem colada com sucesso!");
+          analyzeWithAi(pastedFile);
           return;
         }
       }
@@ -959,9 +1017,31 @@ function ItemDialog({
     <Dialog open={Boolean(item)} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[92vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="font-display text-2xl font-light">
-            {form.id ? "Editar Referência" : "Subir Imagem de Referência"}
-          </DialogTitle>
+          <div className="flex items-center justify-between pr-6">
+            <DialogTitle className="font-display text-2xl font-light">
+              {form.id ? "Editar Referência" : "Subir Imagem de Referência"}
+            </DialogTitle>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={analyzingAi || (!file && !previewUrl)}
+              onClick={() => analyzeWithAi()}
+              className="gap-1.5 text-xs border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300 hover:bg-amber-500/20 shadow-sm"
+            >
+              {analyzingAi ? (
+                <>
+                  <Loader2 className="size-3.5 animate-spin" />
+                  Analisando com IA...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="size-3.5 text-amber-500" />
+                  {form.id ? "Reclassificar com IA" : "Preencher com IA"}
+                </>
+              )}
+            </Button>
+          </div>
         </DialogHeader>
 
         <form id="catalog-form" onSubmit={save} className="space-y-6">
@@ -1022,13 +1102,14 @@ function ItemDialog({
                 />
               </label>
 
-              <div className="text-xs text-muted-foreground space-y-1.5">
-                <p className="font-medium text-foreground">
-                  Suba fotos com boa resolução e boa iluminação.
-                </p>
+              <div className="text-xs text-muted-foreground space-y-1.5 flex-1">
+                <div className="flex items-center gap-1.5 text-foreground font-medium">
+                  <Sparkles className="size-3.5 text-amber-500" />
+                  <span>Classificação automática por IA ativada</span>
+                </div>
                 <p>
-                  Esta imagem já contém a composição completa (roupa, cenário, luz e pose). O
-                  cliente a verá exatamente como ela é.
+                  Ao selecionar ou colar uma foto, a IA ({settings.aiProvider.toUpperCase()}) identifica
+                  automaticamente o tipo de ensaio, número de pessoas, cenário e tags.
                 </p>
                 <div className="flex items-center gap-2 pt-1 text-[0.7rem] text-muted-foreground/80">
                   <span className="rounded bg-secondary px-2 py-0.5 font-mono">PNG / JPG / WEBP</span>
@@ -1238,10 +1319,10 @@ function ItemDialog({
         </form>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={saving}>
+          <Button variant="outline" onClick={onClose} disabled={saving || analyzingAi}>
             Cancelar
           </Button>
-          <Button type="submit" form="catalog-form" disabled={saving}>
+          <Button type="submit" form="catalog-form" disabled={saving || analyzingAi}>
             {saving ? "Salvando imagem..." : form.id ? "Salvar alterações" : "Subir referência"}
           </Button>
         </DialogFooter>
@@ -1250,7 +1331,7 @@ function ItemDialog({
   );
 }
 
-// ─── Dialog de Subir em Lote (Batch Upload para 1000+ Fotos) ─────────────────
+// ─── Dialog de Subir em Lote com IA (Batch Upload) ───────────────────────────
 
 function BatchUploadDialog({
   open,
@@ -1263,7 +1344,9 @@ function BatchUploadDialog({
   onComplete: () => void;
   currentCount: number;
 }) {
+  const { settings } = useStudioSettings();
   const [files, setFiles] = useState<File[]>([]);
+  const [useAi, setUseAi] = useState(true);
   const [sessionTypes, setSessionTypes] = useState<string[]>(["aniversario"]);
   const [peopleCount, setPeopleCount] = useState<number>(1);
   const [gender, setGender] = useState<string>("feminino");
@@ -1272,6 +1355,7 @@ function BatchUploadDialog({
   const [tags, setTags] = useState<string[]>(["baloes"]);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
+  const [progressStatus, setProgressStatus] = useState<string>("");
 
   function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(e.target.files ?? []);
@@ -1299,8 +1383,8 @@ function BatchUploadDialog({
       toast.error("Adicione pelo menos 1 imagem para subir.");
       return;
     }
-    if (sessionTypes.length === 0) {
-      toast.error("Escolha pelo menos 1 tipo de ensaio.");
+    if (!useAi && sessionTypes.length === 0) {
+      toast.error("Escolha pelo menos 1 tipo de ensaio padrão.");
       return;
     }
 
@@ -1308,14 +1392,16 @@ function BatchUploadDialog({
     setProgress({ current: 0, total: files.length });
 
     try {
-      const hasAgeNumber = tags.includes("baloes");
-      const hasCake = tags.includes("bolo");
+      const defaultHasAgeNumber = tags.includes("baloes");
+      const defaultHasCake = tags.includes("bolo");
 
       const rowsToInsert = [];
 
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
         if (!file) continue;
+
+        setProgressStatus(`Subindo arquivo ${i + 1} de ${files.length}...`);
 
         const ext = file.name.split(".").pop() ?? "jpg";
         const path = `referencias/${crypto.randomUUID()}.${ext}`;
@@ -1327,7 +1413,7 @@ function BatchUploadDialog({
 
         if (uploadErr) throw uploadErr;
 
-        rowsToInsert.push({
+        let rowData = {
           image_url: path,
           session_types: sessionTypes,
           people_count: peopleCount,
@@ -1335,26 +1421,54 @@ function BatchUploadDialog({
           ambiance: ambiance,
           style: vibe,
           vibe: vibe,
-          has_cake: hasCake,
-          has_age_number: hasAgeNumber,
+          has_cake: defaultHasCake,
+          has_age_number: defaultHasAgeNumber,
           tags: tags,
           position: currentCount + i,
           active: true,
-        });
+        };
 
+        if (useAi) {
+          try {
+            setProgressStatus(
+              `Analisando foto ${i + 1} de ${files.length} com IA (${settings.aiProvider.toUpperCase()})...`,
+            );
+            const aiResult = await classifyCatalogImage({ image: file, settings });
+            rowData = {
+              ...rowData,
+              session_types: aiResult.session_types.length > 0 ? aiResult.session_types : sessionTypes,
+              people_count: aiResult.people_count,
+              gender: aiResult.gender,
+              ambiance: aiResult.ambiance,
+              style: aiResult.style || aiResult.vibe,
+              vibe: aiResult.vibe,
+              has_cake: aiResult.has_cake,
+              has_age_number: aiResult.has_age_number,
+              tags: aiResult.tags.length > 0 ? aiResult.tags : tags,
+            };
+          } catch (aiErr) {
+            console.warn(`[BatchAI] Aviso: falha ao classificar foto ${i + 1} com IA, usando padrões:`, aiErr);
+          }
+        }
+
+        rowsToInsert.push(rowData);
         setProgress({ current: i + 1, total: files.length });
       }
 
+      setProgressStatus("Gravando no banco de dados...");
       const { error: insertErr } = await supabase.from("catalog_items").insert(rowsToInsert);
       if (insertErr) throw insertErr;
 
-      toast.success(`🎉 ${files.length} imagens adicionadas com sucesso ao catálogo!`);
+      toast.success(
+        `🎉 ${files.length} imagens adicionadas ${useAi ? "e categorizadas com IA" : ""} com sucesso!`,
+      );
       setFiles([]);
       onComplete();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro ao enviar lote de imagens.");
     } finally {
       setUploading(false);
+      setProgressStatus("");
     }
   }
 
@@ -1364,7 +1478,7 @@ function BatchUploadDialog({
         <DialogHeader>
           <DialogTitle className="font-display text-2xl font-light flex items-center gap-2">
             <Layers className="size-6 text-amber-500" />
-            Subir Fotos em Lote (Upload Rápido)
+            Subir Fotos em Lote {useAi ? "com IA Inteligente" : ""}
           </DialogTitle>
         </DialogHeader>
 
@@ -1431,151 +1545,177 @@ function BatchUploadDialog({
             )}
           </div>
 
-          {/* Atributos compartilhados do lote */}
-          <div className="rounded-xl border border-border/80 bg-secondary/30 p-5 space-y-5">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              2. Classificação em lote (aplicada a todas as fotos selecionadas)
-            </p>
-
-            {/* Tipos de ensaio */}
-            <div>
-              <Label className="mb-2 block text-xs font-medium text-foreground">
-                Tipo de ensaio compatível
-              </Label>
-              <div className="flex flex-wrap gap-1.5">
-                {SESSION_TYPES.map((type) => {
-                  const isSelected = sessionTypes.includes(type.value);
-                  return (
-                    <button
-                      key={type.value}
-                      type="button"
-                      onClick={() => toggleSessionType(type.value)}
-                      className={cn(
-                        "rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors",
-                        isSelected
-                          ? "border-foreground bg-foreground text-background"
-                          : "border-border bg-card text-muted-foreground hover:text-foreground",
-                      )}
-                    >
-                      {type.label}
-                    </button>
-                  );
-                })}
+          {/* Toggle de IA Automática */}
+          <div className="rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent p-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                  <Sparkles className="size-4 text-amber-500" />
+                  Classificar cada foto individualmente com IA
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  A IA ({settings.aiProvider.toUpperCase()}) analisará cada imagem para identificar
+                  especificamente o tipo de ensaio, número de pessoas, cenário e tags de cada foto.
+                </p>
               </div>
-            </div>
-
-            {/* Pessoas e Gênero */}
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <Label className="mb-1.5 block text-xs font-medium">Pessoas</Label>
-                <div className="grid grid-cols-4 gap-1.5">
-                  {[1, 2, 3, 4].map((count) => (
-                    <button
-                      key={count}
-                      type="button"
-                      onClick={() => setPeopleCount(count)}
-                      className={cn(
-                        "rounded border py-1.5 text-center text-xs font-medium transition-colors",
-                        peopleCount === count
-                          ? "border-foreground bg-foreground text-background"
-                          : "border-border bg-card text-muted-foreground",
-                      )}
-                    >
-                      {count === 4 ? "4+" : count}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <Label className="mb-1.5 block text-xs font-medium">Gênero</Label>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {GENDER_OPTIONS.map((g) => (
-                    <button
-                      key={g.value}
-                      type="button"
-                      onClick={() => setGender(g.value)}
-                      className={cn(
-                        "rounded border py-1.5 text-center text-xs font-medium transition-colors",
-                        gender === g.value
-                          ? "border-foreground bg-foreground text-background"
-                          : "border-border bg-card text-muted-foreground",
-                      )}
-                    >
-                      {g.label.split(" ")[0]}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Cenário e Clima */}
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <Label className="mb-1.5 block text-xs font-medium">Cenário</Label>
-                <Select value={ambiance} onValueChange={setAmbiance}>
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {AMBIANCE_OPTIONS.map((a) => (
-                      <SelectItem key={a.value} value={a.value} className="text-xs">
-                        {a.icon} {a.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label className="mb-1.5 block text-xs font-medium">Clima / Vibe</Label>
-                <Select value={vibe} onValueChange={setVibe}>
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {VIBE_OPTIONS.map((v) => (
-                      <SelectItem key={v.value} value={v.value} className="text-xs">
-                        {v.icon} {v.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Elementos Dinâmicos do Lote */}
-            <div>
-              <Label className="mb-2 block text-xs font-medium">Elementos em destaque (dinâmico)</Label>
-              <div className="flex flex-wrap gap-1.5">
-                {getContextualElements(sessionTypes).map((el) => {
-                  const isChecked = tags.includes(el.id);
-                  return (
-                    <button
-                      key={el.id}
-                      type="button"
-                      onClick={() => toggleElement(el)}
-                      className={cn(
-                        "flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors",
-                        isChecked
-                          ? "border-amber-500/60 bg-amber-500/15 text-amber-700 dark:text-amber-300"
-                          : "border-border bg-card text-muted-foreground",
-                      )}
-                    >
-                      <span>{el.icon}</span>
-                      <span>{el.label}</span>
-                    </button>
-                  );
-                })}
-              </div>
+              <Switch
+                checked={useAi}
+                onCheckedChange={setUseAi}
+                disabled={uploading}
+              />
             </div>
           </div>
+
+          {/* Atributos de Fallback / Manuais do lote se IA desativada */}
+          {!useAi && (
+            <div className="rounded-xl border border-border/80 bg-secondary/30 p-5 space-y-5">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                2. Classificação manual em lote (aplicada a todas as fotos)
+              </p>
+
+              {/* Tipos de ensaio */}
+              <div>
+                <Label className="mb-2 block text-xs font-medium text-foreground">
+                  Tipo de ensaio compatível
+                </Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {SESSION_TYPES.map((type) => {
+                    const isSelected = sessionTypes.includes(type.value);
+                    return (
+                      <button
+                        key={type.value}
+                        type="button"
+                        onClick={() => toggleSessionType(type.value)}
+                        className={cn(
+                          "rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors",
+                          isSelected
+                            ? "border-foreground bg-foreground text-background"
+                            : "border-border bg-card text-muted-foreground hover:text-foreground",
+                        )}
+                      >
+                        {type.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Pessoas e Gênero */}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <Label className="mb-1.5 block text-xs font-medium">Pessoas</Label>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {[1, 2, 3, 4].map((count) => (
+                      <button
+                        key={count}
+                        type="button"
+                        onClick={() => setPeopleCount(count)}
+                        className={cn(
+                          "rounded border py-1.5 text-center text-xs font-medium transition-colors",
+                          peopleCount === count
+                            ? "border-foreground bg-foreground text-background"
+                            : "border-border bg-card text-muted-foreground",
+                        )}
+                      >
+                        {count === 4 ? "4+" : count}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <Label className="mb-1.5 block text-xs font-medium">Gênero</Label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {GENDER_OPTIONS.map((g) => (
+                      <button
+                        key={g.value}
+                        type="button"
+                        onClick={() => setGender(g.value)}
+                        className={cn(
+                          "rounded border py-1.5 text-center text-xs font-medium transition-colors",
+                          gender === g.value
+                            ? "border-foreground bg-foreground text-background"
+                            : "border-border bg-card text-muted-foreground",
+                        )}
+                      >
+                        {g.label.split(" ")[0]}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Cenário e Clima */}
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <Label className="mb-1.5 block text-xs font-medium">Cenário</Label>
+                  <Select value={ambiance} onValueChange={setAmbiance}>
+                    <SelectTrigger className="h-9 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {AMBIANCE_OPTIONS.map((a) => (
+                        <SelectItem key={a.value} value={a.value} className="text-xs">
+                          {a.icon} {a.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label className="mb-1.5 block text-xs font-medium">Clima / Vibe</Label>
+                  <Select value={vibe} onValueChange={setVibe}>
+                    <SelectTrigger className="h-9 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {VIBE_OPTIONS.map((v) => (
+                        <SelectItem key={v.value} value={v.value} className="text-xs">
+                          {v.icon} {v.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Elementos Dinâmicos do Lote */}
+              <div>
+                <Label className="mb-2 block text-xs font-medium">Elementos em destaque (dinâmico)</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {getContextualElements(sessionTypes).map((el) => {
+                    const isChecked = tags.includes(el.id);
+                    return (
+                      <button
+                        key={el.id}
+                        type="button"
+                        onClick={() => toggleElement(el)}
+                        className={cn(
+                          "flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors",
+                          isChecked
+                            ? "border-amber-500/60 bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                            : "border-border bg-card text-muted-foreground",
+                        )}
+                      >
+                        <span>{el.icon}</span>
+                        <span>{el.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Barra de Progresso do Upload */}
           {uploading && (
             <div className="space-y-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
               <div className="flex items-center justify-between text-xs font-medium text-amber-700 dark:text-amber-300">
-                <span>Enviando fotos para o catálogo...</span>
+                <span className="flex items-center gap-1.5">
+                  <Loader2 className="size-3.5 animate-spin" />
+                  {progressStatus || "Processando imagens..."}
+                </span>
                 <span>
                   {progress.current} de {progress.total} fotos ({Math.round((progress.current / Math.max(1, progress.total)) * 100)}%)
                 </span>
@@ -1602,10 +1742,13 @@ function BatchUploadDialog({
             className="gap-2 bg-foreground text-background hover:bg-foreground/90"
           >
             {uploading ? (
-              "Subindo fotos..."
+              <>
+                <Loader2 className="size-4 animate-spin" />
+                Processando fotos...
+              </>
             ) : (
               <>
-                <Layers className="size-4" />
+                {useAi ? <Sparkles className="size-4 text-amber-400" /> : <Layers className="size-4" />}
                 Subir {files.length} {files.length === 1 ? "foto agora" : "fotos agora"}
               </>
             )}

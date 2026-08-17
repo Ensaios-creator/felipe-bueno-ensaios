@@ -106,13 +106,6 @@ export const CATEGORY_QUESTIONS: Record<string, CategoryQuestion[]> = {
     },
     { key: "mostrar_idade", label: "Pode mostrar a idade na foto?", type: "boolean" },
     {
-      key: "tema",
-      label: "Tem um tema ou decoração em mente?",
-      type: "text",
-      placeholder: "Ex: jardim com velas",
-    },
-    { key: "bolo", label: "O bolo com velas aparece nas fotos?", type: "boolean" },
-    {
       key: "pessoas",
       label: "Quantas pessoas aparecem nas fotos?",
       type: "number",

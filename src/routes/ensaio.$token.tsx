@@ -169,6 +169,17 @@ function EnsaioPage() {
     );
   }
 
+  function autoAdvance(delayMs = 280) {
+    setTimeout(() => {
+      setStepIndex((currentIdx) => {
+        const next = Math.min(steps.length - 1, currentIdx + 1);
+        patchConfig({ current_step: next });
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        return next;
+      });
+    }, delayMs);
+  }
+
   const order = query.data.order;
   const step = steps[stepIndex] ?? "boas-vindas";
 
@@ -274,9 +285,12 @@ function EnsaioPage() {
             <OptionList
               options={SESSION_TYPES.map((type) => ({ ...type }))}
               value={config.session_type}
-              onSelect={(value) =>
-                patchConfig({ session_type: value, session_subtype: null, category_answers: {} })
-              }
+              onSelect={(value) => {
+                patchConfig({ session_type: value, session_subtype: null, category_answers: {} });
+                if (value !== "aniversario") {
+                  autoAdvance(280);
+                }
+              }}
             />
             {config.session_type === "aniversario" ? (
               <div className="mt-8">
@@ -284,7 +298,10 @@ function EnsaioPage() {
                 <OptionList
                   options={BIRTHDAY_SUBTYPES.map((label) => ({ value: label, label }))}
                   value={config.session_subtype}
-                  onSelect={(value) => patchConfig({ session_subtype: value })}
+                  onSelect={(value) => {
+                    patchConfig({ session_subtype: value });
+                    autoAdvance(280);
+                  }}
                 />
               </div>
             ) : null}
@@ -312,7 +329,13 @@ function EnsaioPage() {
                       <OptionList
                         options={question.options.map((label) => ({ value: label, label }))}
                         value={typeof value === "string" ? value : null}
-                        onSelect={update}
+                        onSelect={(val) => {
+                          update(val);
+                          const totalQuestions = (CATEGORY_QUESTIONS[config.session_type ?? ""] ?? []).length;
+                          if (totalQuestions === 1) {
+                            autoAdvance(280);
+                          }
+                        }}
                       />
                     </div>
                   );
@@ -366,28 +389,52 @@ function EnsaioPage() {
                 <OptionList
                   options={FRAMING_OPTIONS}
                   value={config.framing}
-                  onSelect={(value) => patchConfig({ framing: value })}
+                  onSelect={(value) => {
+                    const nextConfig = { ...config, framing: value };
+                    patchConfig({ framing: value });
+                    if (nextConfig.framing && nextConfig.outfit_mode && nextConfig.makeup && nextConfig.hair) {
+                      autoAdvance(320);
+                    }
+                  }}
                 />
               </Group>
               <Group label="Roupa">
                 <OptionList
                   options={OUTFIT_MODES}
                   value={config.outfit_mode}
-                  onSelect={(value) => patchConfig({ outfit_mode: value })}
+                  onSelect={(value) => {
+                    const nextConfig = { ...config, outfit_mode: value };
+                    patchConfig({ outfit_mode: value });
+                    if (nextConfig.framing && nextConfig.outfit_mode && nextConfig.makeup && nextConfig.hair) {
+                      autoAdvance(320);
+                    }
+                  }}
                 />
               </Group>
               <Group label="Maquiagem">
                 <OptionList
                   options={MAKEUP_OPTIONS}
                   value={config.makeup}
-                  onSelect={(value) => patchConfig({ makeup: value })}
+                  onSelect={(value) => {
+                    const nextConfig = { ...config, makeup: value };
+                    patchConfig({ makeup: value });
+                    if (nextConfig.framing && nextConfig.outfit_mode && nextConfig.makeup && nextConfig.hair) {
+                      autoAdvance(320);
+                    }
+                  }}
                 />
               </Group>
               <Group label="Cabelo">
                 <OptionList
                   options={HAIR_OPTIONS}
                   value={config.hair}
-                  onSelect={(value) => patchConfig({ hair: value })}
+                  onSelect={(value) => {
+                    const nextConfig = { ...config, hair: value };
+                    patchConfig({ hair: value });
+                    if (nextConfig.framing && nextConfig.outfit_mode && nextConfig.makeup && nextConfig.hair) {
+                      autoAdvance(320);
+                    }
+                  }}
                 />
               </Group>
             </div>
@@ -403,7 +450,10 @@ function EnsaioPage() {
             <VisualGrid
               items={itemsOf("look")}
               selected={picked["look"] ?? []}
-              onToggle={(id) => toggle("look", id, false)}
+              onToggle={(id) => {
+                toggle("look", id, false);
+                autoAdvance(320);
+              }}
             />
           </StepShell>
         ) : null}
@@ -417,7 +467,10 @@ function EnsaioPage() {
             <VisualGrid
               items={itemsOf("cenario")}
               selected={picked["cenario"] ?? []}
-              onToggle={(id) => toggle("cenario", id, false)}
+              onToggle={(id) => {
+                toggle("cenario", id, false);
+                autoAdvance(320);
+              }}
             />
           </StepShell>
         ) : null}
@@ -431,7 +484,12 @@ function EnsaioPage() {
             <OptionList
               options={MOOD_OPTIONS}
               value={config.lighting_mood}
-              onSelect={(value) => patchConfig({ lighting_mood: value })}
+              onSelect={(value) => {
+                patchConfig({ lighting_mood: value });
+                if (itemsOf("iluminacao").length === 0) {
+                  autoAdvance(280);
+                }
+              }}
             />
             {itemsOf("iluminacao").length > 0 ? (
               <div className="mt-8">
@@ -439,7 +497,10 @@ function EnsaioPage() {
                 <VisualGrid
                   items={itemsOf("iluminacao")}
                   selected={picked["iluminacao"] ?? []}
-                  onToggle={(id) => toggle("iluminacao", id, false)}
+                  onToggle={(id) => {
+                    toggle("iluminacao", id, false);
+                    autoAdvance(320);
+                  }}
                 />
               </div>
             ) : null}
@@ -474,7 +535,10 @@ function EnsaioPage() {
                   <button
                     key={palette.value}
                     type="button"
-                    onClick={() => patchConfig({ color_palette: palette.value })}
+                    onClick={() => {
+                      patchConfig({ color_palette: palette.value });
+                      autoAdvance(280);
+                    }}
                     className={cn(
                       "overflow-hidden rounded-lg border text-left transition-colors",
                       active ? "border-foreground ring-1 ring-foreground" : "border-border",

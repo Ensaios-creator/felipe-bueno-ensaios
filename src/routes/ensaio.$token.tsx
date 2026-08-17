@@ -1,10 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { ArrowLeft, ArrowRight, Check, ImageIcon, MessageCircle, RefreshCw } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Check,
+  CheckCircle2,
+  HelpCircle,
+  ImageIcon,
+  Maximize2,
+  MessageCircle,
+  RefreshCw,
+  Sparkles,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { OptionList } from "@/components/ensaio/choice-cards";
+import { BrandLogo } from "@/components/ensaio/brand-logo";
+import { ImagePreviewModal, OptionList, StudioTip } from "@/components/ensaio/choice-cards";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,7 +38,7 @@ import {
   savePublicOrderClient,
 } from "@/lib/public-order-service";
 import { cn } from "@/lib/utils";
-import { clientSendPhotosMessage, STUDIO_WHATSAPP, whatsappLink } from "@/lib/whatsapp";
+import { clientSendPhotosMessage, getActiveStudioWhatsApp, whatsappLink } from "@/lib/whatsapp";
 
 export const Route = createFileRoute("/ensaio/$token")({
   ssr: false,
@@ -41,7 +54,7 @@ export const Route = createFileRoute("/ensaio/$token")({
         property: "og:description",
         content: "Escolha as fotos de referência do seu ensaio em poucos toques.",
       },
-      { name: "robots", content: "noindex" },
+      { name: "robots", content: "noindex, nofollow" },
     ],
   }),
   component: EnsaioPage,
@@ -73,6 +86,7 @@ function EnsaioPage() {
   const [stepIndex, setStepIndex] = useState(0);
   const [draft, setDraft] = useState<OrderConfigData | null>(null);
   const [selections, setSelections] = useState<Record<string, string[]> | null>(null);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const config = draft ?? query.data?.config ?? null;
   const picked = selections ?? query.data?.selections ?? {};
@@ -91,10 +105,10 @@ function EnsaioPage() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["public-order", token] });
       setDraft(null);
-      toast.success("Tudo enviado! Abrindo WhatsApp...");
+      toast.success("Tudo enviado! Abrindo WhatsApp do estúdio...");
       if (query.data?.order) {
         const url = whatsappLink(
-          STUDIO_WHATSAPP,
+          getActiveStudioWhatsApp(),
           clientSendPhotosMessage({
             clientName: query.data.order.clientName,
             orderNumber: query.data.order.orderNumber,
@@ -136,7 +150,17 @@ function EnsaioPage() {
   }, [hasRestoredStep, query.data?.config?.current_step, steps.length]);
 
   if (query.isLoading) {
-    return <Centered>Abrindo seu ensaio...</Centered>;
+    return (
+      <Centered>
+        <div className="flex flex-col items-center">
+          <BrandLogo size="lg" variant="icon" />
+          <p className="mt-6 font-display text-2xl font-light tracking-tight text-foreground">
+            Abrindo seu ensaio...
+          </p>
+          <p className="mt-2 text-xs text-muted-foreground">Preparando seu ambiente de escolhas</p>
+        </div>
+      </Centered>
+    );
   }
 
   if (query.error || !query.data || !config) {
@@ -146,12 +170,13 @@ function EnsaioPage() {
 
     return (
       <Centered>
-        <p className="font-display text-3xl font-light">
+        <BrandLogo size="default" variant="icon" />
+        <p className="mt-4 font-display text-3xl font-light">
           {isNotFound ? "Link não encontrado" : "Não foi possível carregar"}
         </p>
-        <p className="mt-3 text-sm text-muted-foreground">
+        <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
           {isNotFound
-            ? "Confira o endereço enviado pelo estúdio ou solicite um novo link."
+            ? "Confira o endereço enviado pelo estúdio no WhatsApp ou solicite um novo link."
             : query.error instanceof Error
               ? query.error.message
               : "Verifique sua conexão e tente novamente."}
@@ -198,7 +223,7 @@ function EnsaioPage() {
       } else {
         if (current.length >= order.photoCount) {
           toast.info(
-            `Você já escolheu ${order.photoCount} ${order.photoCount === 1 ? "foto" : "fotos"}. Toque em uma para trocar.`,
+            `Você já escolheu ${order.photoCount} ${order.photoCount === 1 ? "foto" : "fotos"}. Toque em uma foto para trocar.`,
           );
           return base;
         }
@@ -218,7 +243,7 @@ function EnsaioPage() {
 
     let result = [...catalog];
 
-    // Filtro por tipo de ensaio (relaxa se restar < 3 imagens)
+    // Filtro por tipo de ensaio (relaxa se restar < 2 imagens)
     if (sessionType) {
       const byType = result.filter(
         (img) => img.sessionTypes.length === 0 || img.sessionTypes.includes(sessionType),
@@ -226,11 +251,11 @@ function EnsaioPage() {
       if (byType.length >= 2) result = byType;
     }
 
-    // Filtro por número de pessoas (relaxa se restar < 3 imagens)
+    // Filtro por número de pessoas (relaxa se restar < 2 imagens)
     if (peopleCount !== null) {
       const byPeople = result.filter((img) => {
         if (img.peopleCount === null) return true;
-        if (peopleCount >= 3) return img.peopleCount >= 3;
+        if (peopleCount >= 3) return (img.peopleCount ?? 1) >= 3;
         return img.peopleCount === peopleCount;
       });
       if (byPeople.length >= 2) result = byPeople;
@@ -270,49 +295,109 @@ function EnsaioPage() {
 
   return (
     <div className="min-h-screen bg-background pb-32">
-      <header className="sticky top-0 z-10 border-b border-border/70 bg-background/95 backdrop-blur">
-        <div className="mx-auto max-w-2xl px-5 py-4">
-          <div className="flex items-center justify-between text-xs uppercase tracking-[0.18em] text-muted-foreground">
-            <span>Pedido #{order.orderNumber}</span>
-            <span>
-              {stepIndex + 1} / {steps.length}
-            </span>
+      {/* ── Header Fixo Elegante com Logo e Tema ───────────────────────────── */}
+      <header className="sticky top-0 z-20 border-b border-border/80 bg-background/90 backdrop-blur-md">
+        <div className="mx-auto max-w-2xl px-5 py-3.5 flex items-center justify-between">
+          <BrandLogo variant="compact" />
+
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <span className="block text-[0.65rem] uppercase tracking-wider text-muted-foreground font-sans">
+                Etapa {stepIndex + 1} de {steps.length}
+              </span>
+              <span className="block text-xs font-medium text-foreground">
+                Pedido #{order.orderNumber}
+              </span>
+            </div>
+
+            <ThemeToggle variant="ghost" size="icon" className="size-8 text-foreground" />
           </div>
-          <div className="mt-3 h-px w-full bg-border">
-            <div
-              className="h-px bg-foreground transition-all duration-500"
-              style={{ width: `${progress}%` }}
-            />
-          </div>
+        </div>
+
+        {/* Barra de Progresso com Transição Fluida */}
+        <div className="h-0.5 w-full bg-border/60">
+          <div
+            className="h-0.5 bg-gradient-to-r from-amber-500/80 via-foreground to-foreground transition-all duration-500 ease-out"
+            style={{ width: `${progress}%` }}
+          />
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-5 py-10">
+      {/* ── Conteúdo Principal com Animações de Entrada ────────────────────── */}
+      <main className="mx-auto max-w-2xl px-5 py-8 sm:py-10 animate-in fade-in-50 slide-in-from-bottom-2 duration-300">
         {/* ── Boas-vindas ──────────────────────────────────────────────────── */}
         {step === "boas-vindas" ? (
-          <section>
-            <p className="eyebrow">Vamos começar</p>
-            <h1 className="mt-3 font-display text-4xl font-light leading-tight tracking-tight sm:text-5xl">
+          <section className="text-center py-4">
+            <BrandLogo size="lg" variant="full" className="mb-6" />
+
+            <h1 className="mt-4 font-display text-4xl font-light leading-tight tracking-tight sm:text-5xl">
               Olá{order.clientName?.trim() ? `, ${order.clientName.trim().split(" ")[0]}` : ""}.
             </h1>
-            <p className="mt-5 text-base leading-relaxed text-muted-foreground">
-              Seu pacote tem <strong className="text-foreground">{order.photoCount} fotos</strong>.
-              Nas próximas telas você vai escolher imagens de referência — fotos prontas que mostram
-              o estilo que você quer ter.
+
+            <p className="mt-4 text-base sm:text-lg leading-relaxed text-muted-foreground max-w-lg mx-auto">
+              Seu pacote inclui <strong className="text-foreground font-semibold">{order.photoCount} fotos profissionais</strong>.
+              Nas próximas etapas, você vai escolher visualmente como quer que elas fiquem.
             </p>
-            <p className="mt-4 text-base leading-relaxed text-muted-foreground">
-              É simples: <strong className="text-foreground">toque</strong> no que combina com
-              você. Tudo fica salvo automaticamente.
-            </p>
+
+            <div className="mt-8 grid gap-3 text-left sm:grid-cols-3">
+              <div className="rounded-xl border border-border/80 bg-card/60 p-4 shadow-sm">
+                <span className="flex size-8 items-center justify-center rounded-full bg-secondary text-sm font-semibold text-foreground mb-2">
+                  1
+                </span>
+                <p className="font-display text-lg font-light">Escolha visual</p>
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                  Basta tocar nas fotos que você mais gostar.
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-border/80 bg-card/60 p-4 shadow-sm">
+                <span className="flex size-8 items-center justify-center rounded-full bg-secondary text-sm font-semibold text-foreground mb-2">
+                  2
+                </span>
+                <p className="font-display text-lg font-light">Sem complicação</p>
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                  Não precisa de termos técnicos, tudo é simples e guiado.
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-border/80 bg-card/60 p-4 shadow-sm">
+                <span className="flex size-8 items-center justify-center rounded-full bg-secondary text-sm font-semibold text-foreground mb-2">
+                  3
+                </span>
+                <p className="font-display text-lg font-light">Sua identidade</p>
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                  Seu rosto virá das fotos que você enviar no WhatsApp.
+                </p>
+              </div>
+            </div>
+
+            <StudioTip
+              title="Como funciona"
+              text="Leva apenas 2 minutos! Suas escolhas são salvas automaticamente a cada toque. Você pode fechar e voltar quando quiser."
+            />
+
+            <Button
+              size="lg"
+              className="mt-8 w-full sm:w-auto sm:min-w-64 gap-2 text-base h-12"
+              onClick={() => {
+                const next = 1;
+                setStepIndex(next);
+                patchConfig({ current_step: next });
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+            >
+              Começar a montar meu ensaio
+              <ArrowRight className="size-4" />
+            </Button>
           </section>
         ) : null}
 
         {/* ── Tipo de ensaio ───────────────────────────────────────────────── */}
         {step === "tipo" ? (
           <StepShell
-            eyebrow="Tipo de ensaio"
+            eyebrow="Passo 1"
             title="Que tipo de ensaio você quer?"
-            hint="Escolha o que mais combina. Depois a gente refina os detalhes."
+            hint="Toque na opção mais próxima do seu objetivo."
           >
             <OptionList
               options={SESSION_TYPES.map((type) => ({ ...type }))}
@@ -325,7 +410,7 @@ function EnsaioPage() {
               }}
             />
             {config.session_type === "aniversario" ? (
-              <div className="mt-8">
+              <div className="mt-8 animate-in fade-in-50 duration-300">
                 <p className="eyebrow mb-3">Aniversário de quem?</p>
                 <OptionList
                   options={BIRTHDAY_SUBTYPES.map((label) => ({ value: label, label }))}
@@ -337,15 +422,17 @@ function EnsaioPage() {
                 />
               </div>
             ) : null}
+
+            <StudioTip text="Escolha a categoria principal. Na etapa de referências você verá fotos reais desse tipo de ensaio para escolher." />
           </StepShell>
         ) : null}
 
         {/* ── Perguntas específicas da categoria ───────────────────────────── */}
         {step === "categoria" ? (
           <StepShell
-            eyebrow="Detalhes do seu ensaio"
+            eyebrow="Passo 2"
             title="Conta um pouco mais"
-            hint="Essas respostas ajudam a mostrar as fotos certas para você."
+            hint="Essas informações rápidas ajudam a filtrar as melhores fotos para você."
           >
             <div className="space-y-6">
               {(CATEGORY_QUESTIONS[config.session_type ?? ""] ?? []).map((question) => {
@@ -378,7 +465,7 @@ function EnsaioPage() {
                   return (
                     <label
                       key={question.key}
-                      className="flex items-center justify-between gap-4 rounded-lg border border-border bg-card p-4"
+                      className="flex items-center justify-between gap-4 rounded-xl border border-border/80 bg-card/60 p-4"
                     >
                       <span className="font-display text-xl font-light">{question.label}</span>
                       <Switch checked={value === true} onCheckedChange={update} />
@@ -403,20 +490,23 @@ function EnsaioPage() {
                             : event.target.value,
                         )
                       }
+                      className="h-12 text-base"
                     />
                   </div>
                 );
               })}
             </div>
+
+            <StudioTip text="Suas respostas são usadas para que a galeria traga apenas fotos compatíveis com a sua celebração ou projeto." />
           </StepShell>
         ) : null}
 
         {/* ── Maquiagem ────────────────────────────────────────────────────── */}
         {step === "maquiagem" ? (
           <StepShell
-            eyebrow="Maquiagem"
-            title="Como você quer a maquiagem?"
-            hint="Essa escolha vale para todas as fotos do ensaio."
+            eyebrow="Passo 3"
+            title="Como você prefere a maquiagem?"
+            hint="Escolha o estilo de acabamento para a pele e olhos."
           >
             <OptionList
               options={MAKEUP_OPTIONS}
@@ -426,30 +516,43 @@ function EnsaioPage() {
                 autoAdvance(280);
               }}
             />
+
+            <StudioTip text="Se você não costuma usar muita maquiagem no dia a dia, a opção 'Natural' é perfeita para valorizar seus traços com leveza e realismo." />
           </StepShell>
         ) : null}
 
         {/* ── Galeria de referências ───────────────────────────────────────── */}
         {step === "galeria" ? (
           <StepShell
-            eyebrow="Suas referências"
-            title="Escolha as fotos que mais combinam com você"
-            hint={`Toque para selecionar. Você pode escolher até ${order.photoCount} ${order.photoCount === 1 ? "foto" : "fotos"}.`}
+            eyebrow="Passo 4"
+            title="Escolha as fotos que você mais amar"
+            hint={`Toque para escolher até ${order.photoCount} ${order.photoCount === 1 ? "foto" : "fotos de referência"}.`}
           >
-            {/* Contador de progresso */}
-            <div className="mb-5 rounded-lg border border-border bg-card p-4">
-              <div className="flex items-baseline justify-between">
-                <p className="text-sm text-muted-foreground">
-                  {chosenRefIds.length} de {order.photoCount}{" "}
-                  {order.photoCount === 1 ? "foto escolhida" : "fotos escolhidas"}
-                </p>
-                <p className="font-display text-lg font-light">
-                  {chosenRefIds.length >= order.photoCount ? "✓ Completo" : `Faltam ${order.photoCount - chosenRefIds.length}`}
+            {/* Card de Progresso da Seleção */}
+            <div className="mb-6 rounded-xl border border-border/80 bg-card/80 p-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="flex size-7 items-center justify-center rounded-full bg-foreground text-xs font-medium text-background">
+                    {chosenRefIds.length}
+                  </span>
+                  <p className="text-sm font-medium text-foreground">
+                    de {order.photoCount} {order.photoCount === 1 ? "foto selecionada" : "fotos selecionadas"}
+                  </p>
+                </div>
+                <p className="font-display text-base font-light text-muted-foreground">
+                  {chosenRefIds.length >= order.photoCount ? (
+                    <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
+                      <CheckCircle2 className="size-4" /> Pacote Completo
+                    </span>
+                  ) : (
+                    `Faltam ${order.photoCount - chosenRefIds.length}`
+                  )}
                 </p>
               </div>
-              <div className="mt-3 h-px w-full bg-border">
+
+              <div className="mt-3 h-1.5 w-full rounded-full bg-border/60 overflow-hidden">
                 <div
-                  className="h-px bg-foreground transition-all duration-500"
+                  className="h-full bg-foreground transition-all duration-500 ease-out rounded-full"
                   style={{
                     width: `${Math.min(100, Math.round((chosenRefIds.length / Math.max(1, order.photoCount)) * 100))}%`,
                   }}
@@ -458,72 +561,101 @@ function EnsaioPage() {
             </div>
 
             {filteredImages.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border p-12 text-center">
+              <div className="rounded-xl border border-dashed border-border p-12 text-center">
                 <ImageIcon className="mx-auto mb-4 size-8 text-muted-foreground" />
                 <p className="font-display text-xl font-light">
-                  Nenhuma referência disponível ainda
+                  Nenhuma referência disponível no momento
                 </p>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  O estúdio ainda está adicionando fotos. Continue e deixe uma observação.
+                  Você pode avançar e nos contar em observações o estilo que imagina.
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3">
                 {filteredImages.map((img) => {
                   const isSelected = chosenRefIds.includes(img.id);
                   const selectionOrder = chosenRefIds.indexOf(img.id) + 1;
+
                   return (
-                    <button
+                    <div
                       key={img.id}
-                      type="button"
-                      onClick={() => toggleRef(img.id)}
                       className={cn(
-                        "group relative overflow-hidden rounded-xl aspect-[3/4] transition-all duration-200",
+                        "group relative overflow-hidden rounded-xl aspect-[3/4] border transition-all duration-300 select-none",
                         isSelected
-                          ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-[1.02]"
-                          : "opacity-80 hover:opacity-100",
+                          ? "border-foreground ring-2 ring-foreground/90 ring-offset-2 ring-offset-background scale-[1.02] shadow-editorial"
+                          : "border-border/80 bg-card/60 opacity-85 hover:opacity-100 hover:border-foreground/40 hover:shadow-sm",
                       )}
                     >
+                      {/* Clique principal na foto para alternar seleção */}
+                      <button
+                        type="button"
+                        onClick={() => toggleRef(img.id)}
+                        className="size-full text-left"
+                      >
+                        {img.imageUrl ? (
+                          <img
+                            src={img.imageUrl}
+                            alt=""
+                            loading="lazy"
+                            className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
+                          />
+                        ) : (
+                          <div className="flex size-full items-center justify-center bg-muted">
+                            <ImageIcon className="size-8 text-muted-foreground" />
+                          </div>
+                        )}
+                      </button>
+
+                      {/* Botão de Zoom / Ver em tamanho real */}
                       {img.imageUrl ? (
-                        <img
-                          src={img.imageUrl}
-                          alt=""
-                          loading="lazy"
-                          className="size-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex size-full items-center justify-center bg-muted">
-                          <ImageIcon className="size-8 text-muted-foreground" />
-                        </div>
-                      )}
-                      {isSelected ? (
-                        <span className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-full bg-foreground text-sm font-medium text-background shadow-md">
-                          {selectionOrder}
-                        </span>
-                      ) : (
-                        <span className="absolute right-2 top-2 size-8 rounded-full border-2 border-white/60 bg-black/20 opacity-0 transition-opacity group-hover:opacity-100" />
-                      )}
-                    </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPreviewImage(img.imageUrl);
+                          }}
+                          className="absolute left-2 top-2 flex size-7 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/80"
+                          title="Ver foto em tamanho real"
+                        >
+                          <Maximize2 className="size-3.5" />
+                        </button>
+                      ) : null}
+
+                      {/* Badge de Seleção com Número */}
+                      <button
+                        type="button"
+                        onClick={() => toggleRef(img.id)}
+                        className="absolute right-2 top-2"
+                      >
+                        {isSelected ? (
+                          <span className="flex size-7 items-center justify-center rounded-full bg-foreground text-xs font-semibold text-background shadow-md animate-in zoom-in-75 duration-200">
+                            {selectionOrder}
+                          </span>
+                        ) : (
+                          <span className="flex size-7 items-center justify-center rounded-full border border-white/70 bg-black/30 text-transparent opacity-0 transition-opacity group-hover:opacity-100">
+                            <Check className="size-3 text-white" />
+                          </span>
+                        )}
+                      </button>
+                    </div>
                   );
                 })}
               </div>
             )}
-            {chosenRefIds.length > 0 && chosenRefIds.length < order.photoCount ? (
-              <p className="mt-4 text-center text-sm text-muted-foreground">
-                Pode enviar com {chosenRefIds.length}{" "}
-                {chosenRefIds.length === 1 ? "foto" : "fotos"} — as restantes serão variações
-                naturais do mesmo estilo.
-              </p>
-            ) : null}
+
+            <StudioTip
+              title="Dica de Escolha"
+              text="Não se preocupe com o rosto da modelo — o seu rosto e suas características virão das fotos que você enviar no WhatsApp. Escolha as fotos onde você gostar da roupa, pose e iluminação!"
+            />
           </StepShell>
         ) : null}
 
         {/* ── Enquadramento ────────────────────────────────────────────────── */}
         {step === "enquadramento" ? (
           <StepShell
-            eyebrow="Enquadramento"
-            title="Nas fotos, você quer aparecer:"
-            hint="Como a câmera vai te capturar. Vale para todas as fotos."
+            eyebrow="Passo 5"
+            title="Como você quer aparecer nas fotos?"
+            hint="Defina o corte e a distância da câmera."
           >
             <OptionList
               options={FRAMING_OPTIONS}
@@ -533,15 +665,17 @@ function EnsaioPage() {
                 autoAdvance(280);
               }}
             />
+
+            <StudioTip text="Para fotos de perfil profissional ou redes sociais, 'Da cintura para cima' ou 'Variar entre as fotos' são as opções mais versáteis." />
           </StepShell>
         ) : null}
 
         {/* ── Roupa ────────────────────────────────────────────────────────── */}
         {step === "roupa" ? (
           <StepShell
-            eyebrow="Roupa"
+            eyebrow="Passo 6"
             title="Sobre a roupa do ensaio:"
-            hint="As fotos de referência podem ter estilos diferentes — você decide se mantém ou varia."
+            hint="Você pode manter o mesmo estilo ou variar entre as fotos."
           >
             <OptionList
               options={OUTFIT_MODES}
@@ -551,22 +685,20 @@ function EnsaioPage() {
                 autoAdvance(280);
               }}
             />
+
+            <StudioTip text="Se as referências que você escolheu têm estilos e cores de roupas diferentes, a opção 'Variar a roupa' garante maior diversidade no resultado final." />
           </StepShell>
         ) : null}
 
         {/* ── Cabelo ───────────────────────────────────────────────────────── */}
         {step === "cabelo" ? (
           <StepShell
-            eyebrow="Cabelo"
+            eyebrow="Passo 7"
             title="Como você quer o cabelo?"
-            hint={
-              chosenRefs.length > 0
-                ? "Toque na foto onde o cabelo te agrada mais. Ou escolha a última opção."
-                : "Escolha como você prefere."
-            }
+            hint="Toque na foto que tem o cabelo que você quer copiar, ou selecione a opção abaixo para manter o seu cabelo natural."
           >
             {chosenRefs.length > 0 ? (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3">
                 {chosenRefs.map((img, idx) => {
                   const isSelected = config.hair === img.id;
                   return (
@@ -578,10 +710,10 @@ function EnsaioPage() {
                         autoAdvance(280);
                       }}
                       className={cn(
-                        "group relative overflow-hidden rounded-xl aspect-[3/4] transition-all duration-200",
+                        "group relative overflow-hidden rounded-xl aspect-[3/4] border transition-all duration-300 text-left",
                         isSelected
-                          ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-[1.02]"
-                          : "opacity-75 hover:opacity-100",
+                          ? "border-foreground ring-2 ring-foreground/90 ring-offset-2 ring-offset-background scale-[1.02] shadow-editorial"
+                          : "border-border/80 bg-card/60 opacity-80 hover:opacity-100 hover:border-foreground/40",
                       )}
                     >
                       {img.imageUrl ? (
@@ -589,7 +721,7 @@ function EnsaioPage() {
                           src={img.imageUrl}
                           alt={`Referência ${idx + 1}`}
                           loading="lazy"
-                          className="size-full object-cover"
+                          className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
                         />
                       ) : (
                         <div className="flex size-full items-center justify-center bg-muted">
@@ -598,12 +730,18 @@ function EnsaioPage() {
                       )}
                       <div
                         className={cn(
-                          "absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 text-white transition-opacity",
+                          "absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-3 text-white transition-opacity",
                           isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100",
                         )}
                       >
-                        <p className="text-xs font-medium">
-                          {isSelected ? "✓ Esse cabelo" : `Foto ${idx + 1}`}
+                        <p className="text-xs font-medium flex items-center gap-1.5">
+                          {isSelected ? (
+                            <>
+                              <Check className="size-3.5 text-emerald-400" /> Copiar este cabelo
+                            </>
+                          ) : (
+                            `Copiar foto #${idx + 1}`
+                          )}
                         </p>
                       </div>
                     </button>
@@ -611,6 +749,7 @@ function EnsaioPage() {
                 })}
               </div>
             ) : null}
+
             <button
               type="button"
               onClick={() => {
@@ -618,74 +757,89 @@ function EnsaioPage() {
                 autoAdvance(280);
               }}
               className={cn(
-                "mt-4 flex w-full items-start gap-4 rounded-xl border p-4 text-left transition-all",
+                "mt-4 flex w-full items-start gap-4 rounded-xl border p-4 sm:p-5 text-left transition-all duration-300",
                 config.hair === "manter"
-                  ? "border-foreground bg-secondary"
-                  : "border-border hover:border-foreground/40",
+                  ? "border-foreground bg-secondary/80 shadow-editorial ring-1 ring-foreground/20"
+                  : "border-border/80 bg-card/60 hover:border-foreground/40 hover:bg-card",
               )}
             >
               <span className="flex-1">
-                <span className="block font-display text-xl font-light">
-                  Manter o cabelo como estou
+                <span className="block font-display text-xl sm:text-2xl font-light">
+                  Manter meu cabelo natural
                 </span>
-                <span className="mt-1 block text-sm text-muted-foreground">
-                  Nas fotos de identidade que você vai nos enviar
+                <span className="mt-1 block text-xs sm:text-sm text-muted-foreground">
+                  Como você está nas fotos de identidade que vai enviar pelo WhatsApp
                 </span>
               </span>
-              {config.hair === "manter" ? <Check className="mt-1 size-5 shrink-0" /> : null}
+              {config.hair === "manter" ? (
+                <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
+                  <Check className="size-3.5 stroke-[2.5]" />
+                </span>
+              ) : null}
             </button>
+
+            <StudioTip text="Você tem total liberdade: pode copiar um penteado sofisticado de uma das fotos ou pedir para a IA manter o seu corte e estilo natural." />
           </StepShell>
         ) : null}
 
         {/* ── Observações ──────────────────────────────────────────────────── */}
         {step === "observacoes" ? (
           <StepShell
-            eyebrow="Quase lá!"
+            eyebrow="Passo 8"
             title="Quer nos contar mais alguma coisa?"
-            hint="Qualquer detalhe importante para o seu ensaio. Se não tiver nada, pode deixar em branco."
+            hint="Espaço livre para observações, detalhes do seu estilo ou preferências."
           >
             <Textarea
               id="notes"
               rows={5}
-              placeholder="Ex: tenho cabelo curto. Prefiro tons mais escuros. Tenho alergia a determinado produto. Pode ter texto na foto..."
+              placeholder="Ex: prefiro tons mais escuros; tenho tatuagem no braço que quero mostrar; gostaria de fotos mais sorridentes..."
               value={config.special_notes}
               onChange={(event) => patchConfig({ special_notes: event.target.value })}
+              className="text-base p-4"
+            />
+
+            <StudioTip
+              title="Opcional"
+              text="Se não tiver nenhuma observação, pode deixar em branco e clicar em 'Continuar' para revisar suas escolhas."
             />
           </StepShell>
         ) : null}
 
-        {/* ── Resumo ───────────────────────────────────────────────────────── */}
+        {/* ── Resumo & Envio ───────────────────────────────────────────────── */}
         {step === "resumo" ? (
           <StepShell
-            eyebrow="Revisão"
-            title={config.confirmed ? "Tudo enviado ✓" : "Confira suas escolhas"}
+            eyebrow="Revisão Final"
+            title={config.confirmed ? "Tudo enviado com sucesso ✓" : "Confira suas escolhas"}
             hint={
               config.confirmed
-                ? "O estúdio já recebeu tudo. Se quiser mudar algo, fale com a equipe."
-                : "Se algo não estiver certo, use os botões de editar para ajustar."
+                ? "O estúdio já recebeu sua configuração. Agora envie suas fotos pelo WhatsApp."
+                : "Veja o resumo do seu ensaio antes de enviar para o estúdio."
             }
           >
-            {/* Referências escolhidas */}
+            {/* Galeria das fotos de referência escolhidas */}
             {chosenRefs.length > 0 ? (
-              <div className="mb-6">
-                <div className="mb-3 flex items-center justify-between">
-                  <p className="eyebrow">
-                    {chosenRefs.length} {chosenRefs.length === 1 ? "referência" : "referências"}{" "}
-                    escolhida{chosenRefs.length !== 1 ? "s" : ""}
+              <div className="mb-6 rounded-xl border border-border/80 bg-card/60 p-4 sm:p-5">
+                <div className="mb-3.5 flex items-center justify-between">
+                  <p className="eyebrow text-foreground/80 font-medium">
+                    {chosenRefs.length} {chosenRefs.length === 1 ? "Referência Escolhida" : "Referências Escolhidas"}
                   </p>
                   {!config.confirmed ? (
                     <button
                       type="button"
                       onClick={() => setStepIndex(steps.indexOf("galeria"))}
-                      className="text-xs text-muted-foreground underline underline-offset-2"
+                      className="text-xs text-primary underline underline-offset-2 hover:opacity-80"
                     >
-                      editar
+                      Trocar fotos
                     </button>
                   ) : null}
                 </div>
-                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+
+                <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4">
                   {chosenRefs.map((img, idx) => (
-                    <div key={img.id} className="aspect-[3/4] overflow-hidden rounded-lg">
+                    <div
+                      key={img.id}
+                      className="group relative aspect-[3/4] overflow-hidden rounded-lg border border-border/80 bg-muted"
+                    >
                       {img.imageUrl ? (
                         <img
                           src={img.imageUrl}
@@ -693,18 +847,21 @@ function EnsaioPage() {
                           className="size-full object-cover"
                         />
                       ) : (
-                        <div className="flex size-full items-center justify-center bg-muted">
-                          <ImageIcon className="size-4 text-muted-foreground" />
+                        <div className="flex size-full items-center justify-center text-muted-foreground">
+                          <ImageIcon className="size-4" />
                         </div>
                       )}
+                      <span className="absolute bottom-1.5 right-1.5 flex size-5 items-center justify-center rounded-full bg-black/70 text-[0.65rem] font-medium text-white">
+                        #{idx + 1}
+                      </span>
                     </div>
                   ))}
                 </div>
               </div>
             ) : null}
 
-            {/* Resumo das escolhas */}
-            <dl className="divide-y divide-border rounded-lg border border-border bg-card">
+            {/* Resumo das Diretrizes */}
+            <dl className="divide-y divide-border/70 rounded-xl border border-border/80 bg-card/60">
               {(
                 [
                   {
@@ -731,9 +888,9 @@ function EnsaioPage() {
                     label: "Cabelo",
                     value:
                       config.hair === "manter"
-                        ? "Manter como estou"
+                        ? "Manter meu cabelo natural"
                         : config.hair
-                          ? `Cabelo da foto ${(chosenRefIds.indexOf(config.hair) + 1) || "de referência"}`
+                          ? `Copiar foto #${(chosenRefIds.indexOf(config.hair) + 1) || "de referência"}`
                           : undefined,
                     stepId: "cabelo" as StepId,
                   },
@@ -753,14 +910,15 @@ function EnsaioPage() {
                       if (canJump) {
                         setStepIndex(targetIdx);
                         patchConfig({ current_step: targetIdx });
+                        window.scrollTo({ top: 0, behavior: "smooth" });
                       }
                     }}
                     className={cn(
-                      "flex items-baseline justify-between gap-6 px-4 py-3 transition-colors",
+                      "flex items-baseline justify-between gap-6 px-4 py-3.5 transition-colors",
                       canJump && "cursor-pointer hover:bg-secondary/60",
                     )}
                   >
-                    <dt className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <dt className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">
                       <span>{label}</span>
                       {canJump ? (
                         <span className="text-[0.65rem] uppercase tracking-wider text-muted-foreground/60">
@@ -768,7 +926,7 @@ function EnsaioPage() {
                         </span>
                       ) : null}
                     </dt>
-                    <dd className="text-right font-display text-lg font-light">
+                    <dd className="text-right font-display text-base sm:text-lg font-light text-foreground">
                       {value || "Não escolhido"}
                     </dd>
                   </div>
@@ -777,29 +935,38 @@ function EnsaioPage() {
             </dl>
 
             {!config.confirmed ? (
-              <Button
-                className="mt-8 w-full"
-                size="lg"
-                disabled={confirm.isPending}
-                onClick={() => confirm.mutate()}
-              >
-                <MessageCircle className="mr-2 size-4" />
-                {confirm.isPending ? "Enviando..." : "Enviar pelo WhatsApp"}
-              </Button>
+              <div className="mt-8 space-y-3">
+                <Button
+                  className="w-full gap-2.5 h-14 text-base font-medium shadow-editorial bg-emerald-600 hover:bg-emerald-700 text-white dark:bg-emerald-600 dark:hover:bg-emerald-700"
+                  size="lg"
+                  disabled={confirm.isPending}
+                  onClick={() => confirm.mutate()}
+                >
+                  <MessageCircle className="size-5" />
+                  {confirm.isPending ? "Enviando seu ensaio..." : "Enviar pelo WhatsApp"}
+                </Button>
+                <p className="text-center text-xs text-muted-foreground">
+                  Ao clicar, sua configuração será gravada e o WhatsApp do estúdio abrirá para você enviar suas fotos.
+                </p>
+              </div>
             ) : (
               <div className="mt-8 space-y-4">
-                <div className="flex items-center gap-3 rounded-lg border border-border bg-secondary p-5">
-                  <Check className="size-5 shrink-0" />
-                  <p className="text-sm">
-                    Recebido! Agora envie suas fotos de identidade pelo WhatsApp do estúdio — de 3
-                    a 5 fotos de rosto e 1 de corpo inteiro. É delas que vem o seu rosto nas
-                    imagens.
-                  </p>
+                <div className="flex items-start gap-3.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-5">
+                  <CheckCircle2 className="size-6 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="font-medium text-emerald-900 dark:text-emerald-200">
+                      Configuração recebida com sucesso!
+                    </p>
+                    <p className="text-xs sm:text-sm leading-relaxed text-emerald-800/80 dark:text-emerald-300/80">
+                      Agora envie suas fotos de identidade pelo WhatsApp do estúdio (3 a 5 fotos de rosto e 1 de corpo inteiro).
+                    </p>
+                  </div>
                 </div>
-                <Button asChild size="lg" className="w-full">
+
+                <Button asChild size="lg" className="w-full h-14 text-base gap-2 bg-emerald-600 hover:bg-emerald-700 text-white">
                   <a
                     href={whatsappLink(
-                      STUDIO_WHATSAPP,
+                      getActiveStudioWhatsApp(),
                       clientSendPhotosMessage({
                         clientName: order.clientName,
                         orderNumber: order.orderNumber,
@@ -808,7 +975,7 @@ function EnsaioPage() {
                     target="_blank"
                     rel="noreferrer"
                   >
-                    <MessageCircle className="mr-2 size-4" />
+                    <MessageCircle className="size-5" />
                     Enviar minhas fotos pelo WhatsApp
                   </a>
                 </Button>
@@ -818,18 +985,24 @@ function EnsaioPage() {
         ) : null}
       </main>
 
-      {/* ── Navegação fixa na base ────────────────────────────────────────── */}
-      <footer className="fixed inset-x-0 bottom-0 border-t border-border bg-background/95 backdrop-blur">
-        <div className="mx-auto flex max-w-2xl items-center justify-between gap-4 px-5 py-4">
+      {/* ── Navegação Fixa Inferior ────────────────────────────────────────── */}
+      <footer className="fixed inset-x-0 bottom-0 border-t border-border/80 bg-background/95 backdrop-blur-md z-10">
+        <div className="mx-auto flex max-w-2xl items-center justify-between gap-4 px-5 py-3.5">
           <Button
             variant="ghost"
-            onClick={() => setStepIndex((index) => Math.max(0, index - 1))}
+            onClick={() => {
+              const prev = Math.max(0, stepIndex - 1);
+              setStepIndex(prev);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
             disabled={stepIndex === 0}
+            className="gap-2 text-xs uppercase tracking-wider"
           >
-            <ArrowLeft className="mr-2 size-4" />
+            <ArrowLeft className="size-4" />
             Voltar
           </Button>
-          {step !== "resumo" ? (
+
+          {step !== "resumo" && step !== "boas-vindas" ? (
             <Button
               onClick={() => {
                 if (!stepValid) {
@@ -841,18 +1014,26 @@ function EnsaioPage() {
                 patchConfig({ current_step: next });
                 window.scrollTo({ top: 0, behavior: "smooth" });
               }}
+              className="gap-2 text-xs uppercase tracking-wider font-semibold"
             >
               Continuar
-              <ArrowRight className="ml-2 size-4" />
+              <ArrowRight className="size-4" />
             </Button>
           ) : null}
         </div>
       </footer>
+
+      {/* Modal de Zoom de Imagem */}
+      <ImagePreviewModal
+        imageUrl={previewImage}
+        open={Boolean(previewImage)}
+        onClose={() => setPreviewImage(null)}
+      />
     </div>
   );
 }
 
-// ─── Componentes auxiliares ─────────────────────────────────────────────────
+// ─── Componentes Auxiliares ─────────────────────────────────────────────────
 
 function StepShell({
   eyebrow,
@@ -867,12 +1048,19 @@ function StepShell({
 }) {
   return (
     <section>
-      <p className="eyebrow">{eyebrow}</p>
+      <div className="inline-flex items-center gap-2 rounded-full border border-border/80 bg-secondary/50 px-3 py-1 text-[0.68rem] uppercase tracking-widest text-muted-foreground font-medium">
+        <Sparkles className="size-3 text-amber-500" />
+        {eyebrow}
+      </div>
       <h1 className="mt-3 font-display text-3xl font-light leading-tight tracking-tight sm:text-4xl">
         {title}
       </h1>
-      {hint ? <p className="mt-3 text-sm text-muted-foreground">{hint}</p> : null}
-      <div className="mt-8">{children}</div>
+      {hint ? (
+        <p className="mt-2.5 text-xs sm:text-sm text-muted-foreground leading-relaxed">
+          {hint}
+        </p>
+      ) : null}
+      <div className="mt-7">{children}</div>
     </section>
   );
 }

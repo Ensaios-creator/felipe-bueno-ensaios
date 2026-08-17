@@ -1,4 +1,5 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -42,12 +43,7 @@ function HomePage() {
     <div className="min-h-screen bg-background">
       <header className="mx-auto flex max-w-5xl items-center justify-between px-6 py-6">
         <span className="font-display text-lg tracking-tight">Configurador de Ensaios</span>
-        <Link
-          to="/auth"
-          className="text-sm text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
-        >
-          Acesso do estúdio
-        </Link>
+        <ThemeToggle variant="ghost" size="icon" className="size-8" />
       </header>
 
       <main className="mx-auto max-w-5xl px-6 pb-24">

@@ -1,5 +1,11 @@
+import { getStudioWhatsApp } from "./studio-settings";
+
 /** Telefone do estúdio usado nos links de WhatsApp da cliente (formato internacional, só dígitos). */
 export const STUDIO_WHATSAPP = "5537991377328";
+
+export function getActiveStudioWhatsApp(): string {
+  return getStudioWhatsApp();
+}
 
 function digits(phone: string) {
   const only = phone.replace(/\D/g, "");

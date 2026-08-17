@@ -23,7 +23,7 @@ export const Route = createFileRoute("/api/public/ensaio-zip")({
 
         const { data: items } = await supabaseAdmin
           .from("order_items")
-          .select("role, position, catalog_items(code, name, image_url)")
+          .select("role, position, catalog_items(image_url)")
           .eq("order_id", order.id)
           .order("position");
 
@@ -31,8 +31,6 @@ export const Route = createFileRoute("/api/public/ensaio-zip")({
 
         for (const item of items ?? []) {
           const catalogItem = item.catalog_items as {
-            code: string;
-            name: string;
             image_url: string | null;
           } | null;
           const path = catalogItem?.image_url;
@@ -49,10 +47,7 @@ export const Route = createFileRoute("/api/public/ensaio-zip")({
           if (!bytes) continue;
 
           const ext = path.split(".").pop()?.split("?")[0] ?? "jpg";
-          const safeName = `${item.role}-${catalogItem?.code ?? "item"}`.replace(
-            /[^a-zA-Z0-9-_]/g,
-            "-",
-          );
+          const safeName = `referencia-${String(item.position + 1).padStart(2, "0")}`;
           files[`${safeName}.${ext}`] = bytes;
         }
 

@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   Check,
   CheckCircle2,
+  Clock,
   Copy,
   Download,
   MessageCircle,
@@ -31,7 +32,9 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import type { CatalogItemPublic, OrderConfigData } from "@/lib/ensaio-types";
 import { buildSummarySections, referenceImages, summaryToText } from "@/lib/order-summary";
+import { cn } from "@/lib/utils";
 import { identityPhotosMessage, whatsappLink } from "@/lib/whatsapp";
+import { getDeadlineInfo } from "./admin.index";
 
 export const Route = createFileRoute("/_authenticated/admin/pedidos/$orderId")({
   head: () => ({
@@ -199,6 +202,8 @@ function OrderDetailPage() {
   const references = referenceImages(catalogItems, selections);
   const fullText = summaryToText(sections);
   const isDelivered = order.status === "Entregue";
+  const deadlineInfo = getDeadlineInfo(order);
+  const isUrgent = order.priority === "alta" || order.priority === "urgente";
 
   async function copy(key: string, text: string) {
     await navigator.clipboard.writeText(text);
@@ -342,6 +347,28 @@ function OrderDetailPage() {
         <Badge variant={isDelivered ? "default" : "secondary"} className={isDelivered ? "bg-emerald-700 text-white" : ""}>
           {order.status}
         </Badge>
+        <Badge
+          variant={
+            isUrgent
+              ? "destructive"
+              : order.priority === "baixa"
+                ? "outline"
+                : "secondary"
+          }
+        >
+          {isUrgent ? "Prioridade Urgente" : order.priority === "baixa" ? "Prioridade Baixa" : "Prioridade Normal"}
+        </Badge>
+        <span
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium",
+            deadlineInfo.isOverdue
+              ? "border-destructive/40 bg-destructive/10 text-destructive font-semibold"
+              : "border-border bg-secondary/50 text-foreground",
+          )}
+        >
+          <Clock className="size-3" />
+          {deadlineInfo.label}
+        </span>
         <Badge variant="outline">{order.photo_count} fotos</Badge>
         {configData.confirmed ? (
           <Badge variant="outline" className="border-emerald-600/30 text-emerald-700 dark:text-emerald-400">

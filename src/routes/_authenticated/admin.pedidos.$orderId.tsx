@@ -1,10 +1,31 @@
-import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { AlertTriangle, ArrowLeft, Check, Copy, Download, MessageCircle } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Check,
+  CheckCircle2,
+  Copy,
+  Download,
+  MessageCircle,
+  RotateCcw,
+  Trash2,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { AdminShell } from "@/components/admin/admin-shell";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -34,6 +55,8 @@ export const Route = createFileRoute("/_authenticated/admin/pedidos/$orderId")({
 
 function OrderDetailPage() {
   const { orderId } = Route.useParams();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   const query = useQuery({
@@ -115,6 +138,34 @@ function OrderDetailPage() {
     },
   });
 
+  const update = useMutation({
+    mutationFn: async (patch: Record<string, unknown>) => {
+      const { error } = await supabase
+        .from("orders")
+        .update(patch as never)
+        .eq("id", orderId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["order-detail", orderId] });
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const deleteOrder = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from("orders").delete().eq("id", orderId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      toast.success("Pedido excluído.");
+      navigate({ to: "/admin" });
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
   if (query.isLoading) {
     return (
       <AdminShell title="Briefing" eyebrow="Pedido">
@@ -147,6 +198,7 @@ function OrderDetailPage() {
   });
   const references = referenceImages(catalogItems, selections);
   const fullText = summaryToText(sections);
+  const isDelivered = order.status === "Entregue";
 
   async function copy(key: string, text: string) {
     await navigator.clipboard.writeText(text);
@@ -160,66 +212,141 @@ function OrderDetailPage() {
       eyebrow={`Pedido #${order.order_number}`}
       title={order.client_name}
       action={
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="ghost" asChild>
             <Link to="/admin">
               <ArrowLeft className="mr-2 size-4" />
               Pedidos
             </Link>
           </Button>
+
           <Button variant="outline" onClick={() => copy("full", fullText)}>
             {copiedKey === "full" ? (
-              <Check className="mr-2 size-4" />
+              <Check className="mr-2 size-4 text-emerald-600" />
             ) : (
               <Copy className="mr-2 size-4" />
             )}
-            Copiar briefing completo
+            Copiar briefing
           </Button>
+
           {references.length > 0 ? (
-            <Button asChild>
+            <Button asChild variant="outline">
               <a href={`/api/public/ensaio-zip?token=${order.public_token}`}>
                 <Download className="mr-2 size-4" />
                 Baixar referências
               </a>
             </Button>
           ) : null}
+
+          {!isDelivered ? (
+            <Button
+              variant="outline"
+              onClick={() => {
+                update.mutate({ status: "Entregue" });
+                toast.success(`Pedido #${order.order_number} marcado como entregue!`);
+              }}
+              className="border-emerald-600/40 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:border-emerald-500/30 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
+            >
+              <CheckCircle2 className="mr-2 size-4" />
+              Marcar como entregue
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              onClick={() => {
+                update.mutate({ status: "Em produção" });
+                toast.success(`Pedido #${order.order_number} reaberto.`);
+              }}
+            >
+              <RotateCcw className="mr-2 size-4" />
+              Reabrir pedido
+            </Button>
+          )}
+
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="ghost" className="text-destructive/80 hover:bg-destructive/10 hover:text-destructive">
+                <Trash2 className="size-4" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle className="font-display text-2xl font-light">
+                  Excluir pedido #{order.order_number}?
+                </AlertDialogTitle>
+                <AlertDialogDescription className="text-sm leading-relaxed">
+                  Tem certeza que deseja excluir o pedido de <strong>{order.client_name}</strong>?
+                  Esta ação não pode ser desfeita e removerá todas as referências salvas.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => deleteOrder.mutate()}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  Excluir definitivamente
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       }
     >
       {!order.identity_photos_received ? (
-        <div className="mb-8 flex flex-wrap items-start gap-4 rounded-lg border border-destructive/40 bg-destructive/5 p-5">
+        <div className="mb-8 flex flex-wrap items-start gap-4 rounded-lg border border-destructive/40 bg-destructive/5 p-5 shadow-editorial">
           <AlertTriangle className="mt-0.5 size-5 shrink-0 text-destructive" />
           <div className="min-w-64 flex-1">
-            <p className="font-medium">Fotos de identidade ainda não recebidas</p>
+            <p className="font-medium text-destructive">Fotos de identidade ainda não recebidas</p>
             <p className="mt-1 text-sm text-muted-foreground">
               Não gere prompts antes de receber as fotos da cliente pelo WhatsApp. A identidade vem
               sempre das fotos reais — nunca de descrição escrita.
             </p>
           </div>
-          <Button asChild variant="outline">
-            <a
-              href={whatsappLink(
-                order.client_phone,
-                identityPhotosMessage({
-                  clientName: order.client_name,
-                  orderNumber: order.order_number,
-                }),
-              )}
-              target="_blank"
-              rel="noreferrer"
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                update.mutate({
+                  identity_photos_received: true,
+                  status: order.status === "Aguardando fotos de identidade" ? "Pronto para produção" : order.status,
+                });
+                toast.success("Fotos marcadas como recebidas!");
+              }}
             >
-              <MessageCircle className="mr-2 size-4" />
-              Pedir fotos no WhatsApp
-            </a>
-          </Button>
+              <Check className="mr-2 size-4 text-emerald-600" />
+              Marcar como recebidas
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <a
+                href={whatsappLink(
+                  order.client_phone,
+                  identityPhotosMessage({
+                    clientName: order.client_name,
+                    orderNumber: order.order_number,
+                  }),
+                )}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <MessageCircle className="mr-2 size-4" />
+                Pedir fotos no WhatsApp
+              </a>
+            </Button>
+          </div>
         </div>
       ) : null}
 
-      <div className="mb-8 flex flex-wrap gap-2">
-        <Badge variant="secondary">{order.status}</Badge>
+      <div className="mb-8 flex flex-wrap items-center gap-2">
+        <Badge variant={isDelivered ? "default" : "secondary"} className={isDelivered ? "bg-emerald-700 text-white" : ""}>
+          {order.status}
+        </Badge>
         <Badge variant="outline">{order.photo_count} fotos</Badge>
         {configData.confirmed ? (
-          <Badge variant="outline">Configuração confirmada</Badge>
+          <Badge variant="outline" className="border-emerald-600/30 text-emerald-700 dark:text-emerald-400">
+            Configuração confirmada pelo cliente
+          </Badge>
         ) : (
           <Badge variant="outline">Configuração em andamento</Badge>
         )}
@@ -229,7 +356,7 @@ function OrderDetailPage() {
       <div className="grid gap-10 lg:grid-cols-[1.2fr_1fr]">
         <div className="space-y-4">
           {sections.map((section) => (
-            <div key={section.title} className="rounded-lg border border-border bg-card p-5">
+            <div key={section.title} className="rounded-lg border border-border bg-card p-5 shadow-sm">
               <div className="mb-3 flex items-start justify-between gap-4">
                 <p className="eyebrow">{section.title}</p>
                 <Button
@@ -238,7 +365,7 @@ function OrderDetailPage() {
                   onClick={() => copy(section.title, `${section.title}\n${section.body}`)}
                 >
                   {copiedKey === section.title ? (
-                    <Check className="size-4" />
+                    <Check className="size-4 text-emerald-600" />
                   ) : (
                     <Copy className="size-4" />
                   )}
@@ -257,7 +384,7 @@ function OrderDetailPage() {
             {references.map((item) => (
               <div
                 key={item.id}
-                className="group overflow-hidden rounded-lg border border-border bg-card"
+                className="group overflow-hidden rounded-lg border border-border bg-card shadow-sm"
               >
                 {item.imageUrl ? (
                   <a href={item.imageUrl} target="_blank" rel="noreferrer">
@@ -299,3 +426,4 @@ function OrderDetailPage() {
     </AdminShell>
   );
 }
+

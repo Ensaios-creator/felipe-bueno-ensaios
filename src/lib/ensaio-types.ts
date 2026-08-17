@@ -1,15 +1,13 @@
-import type { Category } from "./ensaio-options";
-
 export type CatalogItemPublic = {
   id: string;
-  code: string;
-  category: Category;
-  name: string;
   imageUrl: string | null;
-  color: string | null;
+  sessionTypes: string[];
+  peopleCount: number | null;
+  gender: string | null;
+  ambiance: string | null;
   style: string | null;
-  tags: string[];
-  aiDescription: string;
+  vibe: string | null;
+  position: number;
 };
 
 export type OrderConfigData = {
@@ -18,6 +16,7 @@ export type OrderConfigData = {
   framing: string | null;
   outfit_mode: string | null;
   makeup: string | null;
+  /** Stores "manter" or a reference image ID */
   hair: string | null;
   color_palette: string | null;
   lighting_mood: string | null;

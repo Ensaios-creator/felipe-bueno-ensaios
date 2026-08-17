@@ -81,7 +81,10 @@ function OrderDetailPage() {
           .order("position"),
         supabase
           .from("catalog_items")
-          .select("id, code, category, name, image_url, color, style, tags, ai_description"),
+          .select(
+            "id, image_url, style, position, session_types, people_count, gender, ambiance, vibe, has_cake, has_age_number, tags, active",
+          )
+          .order("position"),
       ]);
 
       const storagePaths = Array.from(
@@ -109,16 +112,16 @@ function OrderDetailPage() {
 
       const catalogItems: CatalogItemPublic[] = (catalog ?? []).map((c) => ({
         id: c.id,
-        code: c.code,
-        category: c.category as CatalogItemPublic["category"],
-        name: c.name,
         imageUrl: c.image_url?.startsWith("http")
           ? c.image_url
           : (urlMap[c.image_url ?? ""] ?? null),
-        color: c.color,
-        style: c.style,
-        tags: c.tags ?? [],
-        aiDescription: c.ai_description,
+        sessionTypes: (c.session_types ?? []) as string[],
+        peopleCount: c.people_count ?? null,
+        gender: c.gender ?? null,
+        ambiance: c.ambiance ?? null,
+        style: c.style ?? null,
+        vibe: c.vibe ?? null,
+        position: c.position ?? 0,
       }));
 
       const configData: OrderConfigData = {
@@ -406,38 +409,47 @@ function OrderDetailPage() {
         </div>
 
         <div>
-          <p className="eyebrow">Referências visuais escolhidas</p>
-          <div className="mt-4 grid grid-cols-2 gap-4">
-            {references.map((item) => (
+          <p className="eyebrow">
+            Referências visuais escolhidas ({references.length})
+          </p>
+          <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-2">
+            {references.map((item, index) => (
               <div
                 key={item.id}
-                className="group overflow-hidden rounded-lg border border-border bg-card shadow-sm"
+                className="group relative overflow-hidden rounded-xl border border-border bg-card shadow-sm"
               >
-                {item.imageUrl ? (
-                  <a href={item.imageUrl} target="_blank" rel="noreferrer">
-                    <img
-                      src={item.imageUrl}
-                      alt={item.name}
-                      loading="lazy"
-                      className="aspect-[4/5] w-full object-cover transition-transform group-hover:scale-[1.02]"
-                    />
-                  </a>
-                ) : (
-                  <div className="flex aspect-[4/5] w-full items-center justify-center bg-muted/60 p-3 text-center">
-                    <span className="font-display text-sm font-light text-muted-foreground">
-                      {item.name}
-                    </span>
-                  </div>
-                )}
-                <p className="p-2 text-xs text-muted-foreground">
-                  <span className="font-mono font-medium text-foreground">{item.code}</span> ·{" "}
-                  {item.name}
-                </p>
+                <div className="relative aspect-[3/4] w-full overflow-hidden bg-muted">
+                  {item.imageUrl ? (
+                    <a href={item.imageUrl} target="_blank" rel="noreferrer">
+                      <img
+                        src={item.imageUrl}
+                        alt={`Referência ${index + 1}`}
+                        loading="lazy"
+                        className="size-full object-cover transition-transform duration-300 group-hover:scale-105"
+                      />
+                    </a>
+                  ) : (
+                    <div className="flex size-full items-center justify-center text-muted-foreground">
+                      <span className="font-display text-sm">Sem imagem</span>
+                    </div>
+                  )}
+                  <span className="absolute left-2.5 top-2.5 flex size-7 items-center justify-center rounded-full bg-foreground/90 text-xs font-semibold text-background shadow">
+                    #{index + 1}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between p-2.5 text-xs text-muted-foreground">
+                  <span className="capitalize font-medium text-foreground">
+                    {item.style || item.vibe || "Ensaio completo"}
+                  </span>
+                  {item.peopleCount ? (
+                    <span>{item.peopleCount} {item.peopleCount === 1 ? "pessoa" : "pessoas"}</span>
+                  ) : null}
+                </div>
               </div>
             ))}
             {references.length === 0 ? (
               <p className="col-span-2 text-sm text-muted-foreground">
-                A cliente ainda não escolheu referências visuais.
+                O cliente ainda não escolheu referências visuais.
               </p>
             ) : null}
           </div>

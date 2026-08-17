@@ -48,9 +48,10 @@ export const getPublicOrder = createServerFn({ method: "GET" })
         .eq("order_id", order.id),
       supabaseAdmin
         .from("catalog_items")
-        .select("id, code, category, name, image_url, color, style, tags, ai_description")
+        .select(
+          "id, image_url, style, position, session_types, people_count, gender, ambiance, vibe, has_cake, has_age_number, tags, active",
+        )
         .eq("active", true)
-        .order("category")
         .order("position"),
     ]);
 
@@ -92,14 +93,14 @@ export const getPublicOrder = createServerFn({ method: "GET" })
       selections,
       catalog: (catalog ?? []).map((c) => ({
         id: c.id,
-        code: c.code,
-        category: c.category as PublicOrderPayload["catalog"][number]["category"],
-        name: c.name,
         imageUrl: displayUrl(c.image_url, urlMap),
-        color: c.color,
-        style: c.style,
-        tags: c.tags ?? [],
-        aiDescription: c.ai_description,
+        sessionTypes: (c.session_types ?? []) as string[],
+        peopleCount: c.people_count ?? null,
+        gender: c.gender ?? null,
+        ambiance: c.ambiance ?? null,
+        style: c.style ?? null,
+        vibe: c.vibe ?? null,
+        position: c.position ?? 0,
       })),
     };
   });

@@ -25,6 +25,20 @@ function assertToken(token: unknown): string {
   return token;
 }
 
+// Interface local para os campos do catalog_items que podem não estar
+// nos tipos gerados pelo Supabase (campos adicionados via migration).
+interface CatalogRaw {
+  id: string;
+  image_url: string | null;
+  style: string | null;
+  position: number;
+  session_types: string[] | null;
+  people_count: number | null;
+  gender: string | null;
+  ambiance: string | null;
+  vibe: string | null;
+}
+
 export async function fetchPublicOrder(token: string): Promise<PublicOrderPayload> {
   const cleanToken = assertToken(token);
 
@@ -54,22 +68,27 @@ export async function fetchPublicOrder(token: string): Promise<PublicOrderPayloa
     config = inserted.data;
   }
 
-  const [{ data: items }, { data: catalog }] = await Promise.all([
+  const [{ data: items }, rawCatalogResult] = await Promise.all([
     publicSupabase
       .from("order_items")
       .select("catalog_item_id, role, position")
       .eq("order_id", order.id),
-    publicSupabase
+    // Cast necessário pois os campos adicionados via migration podem não estar
+    // no tipo gerado automaticamente pelo Supabase CLI.
+    (publicSupabase
       .from("catalog_items")
-      .select("id, code, category, name, image_url, color, style, tags, ai_description")
+      .select(
+        "id, image_url, style, position, session_types, people_count, gender, ambiance, vibe",
+      )
       .eq("active", true)
-      .order("category")
-      .order("position"),
+      .order("position") as unknown) as Promise<{ data: CatalogRaw[] | null }>,
   ]);
+
+  const catalog = ((await rawCatalogResult).data ?? []);
 
   const storagePaths = Array.from(
     new Set(
-      (catalog ?? [])
+      catalog
         .map((c) => c.image_url)
         .filter((p): p is string => Boolean(p) && !p!.startsWith("http")),
     ),
@@ -118,19 +137,19 @@ export async function fetchPublicOrder(token: string): Promise<PublicOrderPayloa
       confirmed: config?.confirmed ?? false,
     },
     selections,
-    catalog: (catalog ?? []).map((c) => ({
+    catalog: catalog.map((c) => ({
       id: c.id,
-      code: c.code,
-      category: c.category as CatalogItemPublic["category"],
-      name: c.name,
       imageUrl: c.image_url?.startsWith("http")
         ? c.image_url
         : (urlMap[c.image_url ?? ""] ?? null),
-      color: c.color,
-      style: c.style,
-      tags: c.tags ?? [],
-      aiDescription: c.ai_description,
-    })),
+      sessionTypes: (c.session_types ?? []) as string[],
+      peopleCount: c.people_count ?? null,
+      gender: c.gender ?? null,
+      ambiance: c.ambiance ?? null,
+      style: c.style ?? null,
+      vibe: c.vibe ?? null,
+      position: c.position ?? 0,
+    })) satisfies CatalogItemPublic[],
   };
 }
 

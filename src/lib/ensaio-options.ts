@@ -60,9 +60,9 @@ export const OUTFIT_MODES = [
 ];
 
 export const MAKEUP_OPTIONS = [
-  { value: "natural", label: "Natural" },
-  { value: "glam", label: "Glam" },
-  { value: "nao-aplica", label: "Não se aplica" },
+  { value: "natural", label: "Natural", hint: "Leve, pele bonita e cores suaves" },
+  { value: "marcante", label: "Marcante", hint: "Mais cor, olho definido, batom forte" },
+  { value: "nao-quero", label: "Não quero maquiagem" },
 ];
 
 export const HAIR_OPTIONS = [

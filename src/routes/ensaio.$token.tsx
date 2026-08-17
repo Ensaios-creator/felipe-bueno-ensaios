@@ -1,10 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { ArrowLeft, ArrowRight, Check, MessageCircle, RefreshCw } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, ImageIcon, MessageCircle, RefreshCw } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { OptionList, VisualGrid } from "@/components/ensaio/choice-cards";
+import { OptionList } from "@/components/ensaio/choice-cards";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,14 +14,11 @@ import {
   BIRTHDAY_SUBTYPES,
   CATEGORY_QUESTIONS,
   FRAMING_OPTIONS,
-  HAIR_OPTIONS,
   MAKEUP_OPTIONS,
-  MOOD_OPTIONS,
   OUTFIT_MODES,
-  PALETTE_OPTIONS,
   SESSION_TYPES,
 } from "@/lib/ensaio-options";
-import type { OrderConfigData } from "@/lib/ensaio-types";
+import type { CatalogItemPublic, OrderConfigData } from "@/lib/ensaio-types";
 import {
   confirmPublicOrderClient,
   fetchPublicOrder,
@@ -34,15 +31,15 @@ export const Route = createFileRoute("/ensaio/$token")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "Monte seu ensaio — Configurador de Ensaios" },
+      { title: "Monte seu ensaio — Felipe Bueno" },
       {
         name: "description",
-        content: "Escolha look, cenário, luz e poses do seu ensaio em poucos toques.",
+        content: "Escolha as fotos de referência do seu ensaio em poucos toques.",
       },
       { property: "og:title", content: "Monte seu ensaio" },
       {
         property: "og:description",
-        content: "Escolha look, cenário, luz e poses do seu ensaio em poucos toques.",
+        content: "Escolha as fotos de referência do seu ensaio em poucos toques.",
       },
       { name: "robots", content: "noindex" },
     ],
@@ -54,14 +51,12 @@ type StepId =
   | "boas-vindas"
   | "tipo"
   | "categoria"
-  | "essenciais"
-  | "look"
-  | "cenario"
-  | "iluminacao"
-  | "acessorio"
-  | "paleta"
-  | "pose"
-  | "detalhes"
+  | "maquiagem"
+  | "galeria"
+  | "enquadramento"
+  | "roupa"
+  | "cabelo"
+  | "observacoes"
   | "resumo";
 
 function EnsaioPage() {
@@ -96,7 +91,7 @@ function EnsaioPage() {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["public-order", token] });
       setDraft(null);
-      toast.success("Tudo enviado para o estúdio! Abrindo WhatsApp...");
+      toast.success("Tudo enviado! Abrindo WhatsApp...");
       if (query.data?.order) {
         const url = whatsappLink(
           STUDIO_WHATSAPP,
@@ -113,16 +108,16 @@ function EnsaioPage() {
 
   const steps = useMemo<StepId[]>(() => {
     const base: StepId[] = ["boas-vindas", "tipo"];
-    if ((CATEGORY_QUESTIONS[config?.session_type ?? ""] ?? []).length > 0) base.push("categoria");
+    if ((CATEGORY_QUESTIONS[config?.session_type ?? ""] ?? []).length > 0) {
+      base.push("categoria");
+    }
     base.push(
-      "essenciais",
-      "look",
-      "cenario",
-      "iluminacao",
-      "acessorio",
-      "paleta",
-      "pose",
-      "detalhes",
+      "maquiagem",
+      "galeria",
+      "enquadramento",
+      "roupa",
+      "cabelo",
+      "observacoes",
       "resumo",
     );
     return base;
@@ -169,6 +164,8 @@ function EnsaioPage() {
     );
   }
 
+  // ─── Helpers ────────────────────────────────────────────────────────────────
+
   function autoAdvance(delayMs = 280) {
     setTimeout(() => {
       setStepIndex((currentIdx) => {
@@ -191,54 +188,85 @@ function EnsaioPage() {
     save.mutate({ config: patch as Record<string, unknown> });
   }
 
-  function toggle(role: string, id: string, multi: boolean, max?: number) {
+  function toggleRef(id: string) {
     setSelections((prev) => {
       const base = prev ?? query.data?.selections ?? {};
-      const current = base[role] ?? [];
+      const current = base["referencia"] ?? [];
       let next: string[];
       if (current.includes(id)) {
-        next = current.filter((value) => value !== id);
-      } else if (multi) {
-        if (max && current.length >= max) {
-          toast.info(`Você já escolheu ${max}. Toque em uma para trocar.`);
+        next = current.filter((v) => v !== id);
+      } else {
+        if (current.length >= order.photoCount) {
+          toast.info(
+            `Você já escolheu ${order.photoCount} ${order.photoCount === 1 ? "foto" : "fotos"}. Toque em uma para trocar.`,
+          );
           return base;
         }
         next = [...current, id];
-      } else {
-        next = [id];
       }
-      const merged = { ...base, [role]: next };
-      save.mutate({ selections: { [role]: next } });
+      const merged = { ...base, referencia: next };
+      save.mutate({ selections: { referencia: next } });
       return merged;
     });
   }
 
-  function itemsOf(category: string) {
-    return catalog.filter((item) => item.category === category);
+  /** Filtra as imagens de referência com base nas respostas do cliente. */
+  function getFilteredImages(): CatalogItemPublic[] {
+    const sessionType = config?.session_type ?? null;
+    const peopleAnswer = config?.category_answers?.["pessoas"];
+    const peopleCount = typeof peopleAnswer === "number" ? peopleAnswer : null;
+
+    let result = [...catalog];
+
+    // Filtro por tipo de ensaio (relaxa se restar < 3 imagens)
+    if (sessionType) {
+      const byType = result.filter(
+        (img) => img.sessionTypes.length === 0 || img.sessionTypes.includes(sessionType),
+      );
+      if (byType.length >= 2) result = byType;
+    }
+
+    // Filtro por número de pessoas (relaxa se restar < 3 imagens)
+    if (peopleCount !== null) {
+      const byPeople = result.filter((img) => {
+        if (img.peopleCount === null) return true;
+        if (peopleCount >= 3) return img.peopleCount >= 3;
+        return img.peopleCount === peopleCount;
+      });
+      if (byPeople.length >= 2) result = byPeople;
+    }
+
+    return result;
   }
+
+  // ─── Estado derivado ─────────────────────────────────────────────────────────
+
+  const filteredImages = getFilteredImages();
+  const chosenRefIds = picked["referencia"] ?? [];
+  const chosenRefs = catalog.filter((img) => chosenRefIds.includes(img.id));
 
   const stepValid = (() => {
     switch (step) {
       case "tipo":
         return Boolean(config.session_type);
-      case "essenciais":
-        return Boolean(config.framing && config.outfit_mode && config.makeup && config.hair);
-      case "look":
-        return (picked["look"] ?? []).length > 0 || itemsOf("look").length === 0;
-      case "cenario":
-        return (picked["cenario"] ?? []).length > 0 || itemsOf("cenario").length === 0;
-      case "iluminacao":
-        return Boolean(config.lighting_mood);
-      case "paleta":
-        return Boolean(config.color_palette);
-      case "pose":
-        return (picked["pose"] ?? []).length > 0 || itemsOf("pose").length === 0;
+      case "maquiagem":
+        return Boolean(config.makeup);
+      case "galeria":
+        return chosenRefIds.length > 0;
+      case "enquadramento":
+        return Boolean(config.framing);
+      case "roupa":
+        return Boolean(config.outfit_mode);
+      case "cabelo":
+        return Boolean(config.hair);
       default:
         return true;
     }
   })();
 
   const progress = Math.round(((stepIndex + 1) / steps.length) * 100);
+
+  // ─── Render ──────────────────────────────────────────────────────────────────
 
   return (
     <div className="min-h-screen bg-background pb-32">
@@ -260,6 +288,7 @@ function EnsaioPage() {
       </header>
 
       <main className="mx-auto max-w-2xl px-5 py-10">
+        {/* ── Boas-vindas ──────────────────────────────────────────────────── */}
         {step === "boas-vindas" ? (
           <section>
             <p className="eyebrow">Vamos começar</p>
@@ -268,19 +297,22 @@ function EnsaioPage() {
             </h1>
             <p className="mt-5 text-base leading-relaxed text-muted-foreground">
               Seu pacote tem <strong className="text-foreground">{order.photoCount} fotos</strong>.
-              Nas próximas telas você vai escolher, olhando imagens, como quer que elas sejam.
+              Nas próximas telas você vai escolher imagens de referência — fotos prontas que mostram
+              o estilo que você quer ter.
             </p>
             <p className="mt-4 text-base leading-relaxed text-muted-foreground">
-              Leva poucos minutos, tudo fica salvo automaticamente e você pode voltar depois.
+              É simples: <strong className="text-foreground">toque</strong> no que combina com
+              você. Tudo fica salvo automaticamente.
             </p>
           </section>
         ) : null}
 
+        {/* ── Tipo de ensaio ───────────────────────────────────────────────── */}
         {step === "tipo" ? (
           <StepShell
             eyebrow="Tipo de ensaio"
             title="Que tipo de ensaio você quer?"
-            hint="Escolha o que mais se aproxima. Depois refinamos os detalhes."
+            hint="Escolha o que mais combina. Depois a gente refina os detalhes."
           >
             <OptionList
               options={SESSION_TYPES.map((type) => ({ ...type }))}
@@ -308,11 +340,12 @@ function EnsaioPage() {
           </StepShell>
         ) : null}
 
+        {/* ── Perguntas específicas da categoria ───────────────────────────── */}
         {step === "categoria" ? (
           <StepShell
             eyebrow="Detalhes do seu ensaio"
-            title="Conte um pouco mais"
-            hint="Só o que ajuda a montar a cena."
+            title="Conta um pouco mais"
+            hint="Essas respostas ajudam a mostrar as fotos certas para você."
           >
             <div className="space-y-6">
               {(CATEGORY_QUESTIONS[config.session_type ?? ""] ?? []).map((question) => {
@@ -331,10 +364,10 @@ function EnsaioPage() {
                         value={typeof value === "string" ? value : null}
                         onSelect={(val) => {
                           update(val);
-                          const totalQuestions = (CATEGORY_QUESTIONS[config.session_type ?? ""] ?? []).length;
-                          if (totalQuestions === 1) {
-                            autoAdvance(280);
-                          }
+                          const totalQuestions = (
+                            CATEGORY_QUESTIONS[config.session_type ?? ""] ?? []
+                          ).filter((q) => q.type === "choice").length;
+                          if (totalQuestions === 1) autoAdvance(280);
                         }}
                       />
                     </div>
@@ -361,7 +394,7 @@ function EnsaioPage() {
                     <Input
                       id={question.key}
                       type={question.type === "number" ? "number" : "text"}
-                      placeholder={question.placeholder}
+                      placeholder={(question as { placeholder?: string }).placeholder}
                       value={value === null || value === undefined ? "" : String(value)}
                       onChange={(event) =>
                         update(
@@ -378,349 +411,339 @@ function EnsaioPage() {
           </StepShell>
         ) : null}
 
-        {step === "essenciais" ? (
+        {/* ── Maquiagem ────────────────────────────────────────────────────── */}
+        {step === "maquiagem" ? (
           <StepShell
-            eyebrow="O essencial"
-            title="Como você quer aparecer?"
-            hint="Quatro escolhas rápidas que valem para todas as fotos."
-          >
-            <div className="space-y-8">
-              <Group label="Enquadramento">
-                <OptionList
-                  options={FRAMING_OPTIONS}
-                  value={config.framing}
-                  onSelect={(value) => {
-                    const nextConfig = { ...config, framing: value };
-                    patchConfig({ framing: value });
-                    if (nextConfig.framing && nextConfig.outfit_mode && nextConfig.makeup && nextConfig.hair) {
-                      autoAdvance(320);
-                    }
-                  }}
-                />
-              </Group>
-              <Group label="Roupa">
-                <OptionList
-                  options={OUTFIT_MODES}
-                  value={config.outfit_mode}
-                  onSelect={(value) => {
-                    const nextConfig = { ...config, outfit_mode: value };
-                    patchConfig({ outfit_mode: value });
-                    if (nextConfig.framing && nextConfig.outfit_mode && nextConfig.makeup && nextConfig.hair) {
-                      autoAdvance(320);
-                    }
-                  }}
-                />
-              </Group>
-              <Group label="Maquiagem">
-                <OptionList
-                  options={MAKEUP_OPTIONS}
-                  value={config.makeup}
-                  onSelect={(value) => {
-                    const nextConfig = { ...config, makeup: value };
-                    patchConfig({ makeup: value });
-                    if (nextConfig.framing && nextConfig.outfit_mode && nextConfig.makeup && nextConfig.hair) {
-                      autoAdvance(320);
-                    }
-                  }}
-                />
-              </Group>
-              <Group label="Cabelo">
-                <OptionList
-                  options={HAIR_OPTIONS}
-                  value={config.hair}
-                  onSelect={(value) => {
-                    const nextConfig = { ...config, hair: value };
-                    patchConfig({ hair: value });
-                    if (nextConfig.framing && nextConfig.outfit_mode && nextConfig.makeup && nextConfig.hair) {
-                      autoAdvance(320);
-                    }
-                  }}
-                />
-              </Group>
-            </div>
-          </StepShell>
-        ) : null}
-
-        {step === "look" ? (
-          <StepShell
-            eyebrow="Look"
-            title="Qual roupa você quer usar?"
-            hint="Toque na imagem que mais combina com você."
-          >
-            <VisualGrid
-              items={itemsOf("look")}
-              selected={picked["look"] ?? []}
-              onToggle={(id) => {
-                toggle("look", id, false);
-                autoAdvance(320);
-              }}
-            />
-          </StepShell>
-        ) : null}
-
-        {step === "cenario" ? (
-          <StepShell
-            eyebrow="Cenário"
-            title="Onde você imagina as fotos?"
-            hint="O cenário fica o mesmo em todas as fotos do ensaio."
-          >
-            <VisualGrid
-              items={itemsOf("cenario")}
-              selected={picked["cenario"] ?? []}
-              onToggle={(id) => {
-                toggle("cenario", id, false);
-                autoAdvance(320);
-              }}
-            />
-          </StepShell>
-        ) : null}
-
-        {step === "iluminacao" ? (
-          <StepShell
-            eyebrow="Luz"
-            title="Que clima de luz você quer?"
-            hint="A luz muda completamente a sensação da imagem."
+            eyebrow="Maquiagem"
+            title="Como você quer a maquiagem?"
+            hint="Essa escolha vale para todas as fotos do ensaio."
           >
             <OptionList
-              options={MOOD_OPTIONS}
-              value={config.lighting_mood}
+              options={MAKEUP_OPTIONS}
+              value={config.makeup}
               onSelect={(value) => {
-                patchConfig({ lighting_mood: value });
-                if (itemsOf("iluminacao").length === 0) {
-                  autoAdvance(280);
-                }
+                patchConfig({ makeup: value });
+                autoAdvance(280);
               }}
             />
-            {itemsOf("iluminacao").length > 0 ? (
-              <div className="mt-8">
-                <p className="eyebrow mb-3">Referências de luz (opcional)</p>
-                <VisualGrid
-                  items={itemsOf("iluminacao")}
-                  selected={picked["iluminacao"] ?? []}
-                  onToggle={(id) => {
-                    toggle("iluminacao", id, false);
-                    autoAdvance(320);
+          </StepShell>
+        ) : null}
+
+        {/* ── Galeria de referências ───────────────────────────────────────── */}
+        {step === "galeria" ? (
+          <StepShell
+            eyebrow="Suas referências"
+            title="Escolha as fotos que mais combinam com você"
+            hint={`Toque para selecionar. Você pode escolher até ${order.photoCount} ${order.photoCount === 1 ? "foto" : "fotos"}.`}
+          >
+            {/* Contador de progresso */}
+            <div className="mb-5 rounded-lg border border-border bg-card p-4">
+              <div className="flex items-baseline justify-between">
+                <p className="text-sm text-muted-foreground">
+                  {chosenRefIds.length} de {order.photoCount}{" "}
+                  {order.photoCount === 1 ? "foto escolhida" : "fotos escolhidas"}
+                </p>
+                <p className="font-display text-lg font-light">
+                  {chosenRefIds.length >= order.photoCount ? "✓ Completo" : `Faltam ${order.photoCount - chosenRefIds.length}`}
+                </p>
+              </div>
+              <div className="mt-3 h-px w-full bg-border">
+                <div
+                  className="h-px bg-foreground transition-all duration-500"
+                  style={{
+                    width: `${Math.min(100, Math.round((chosenRefIds.length / Math.max(1, order.photoCount)) * 100))}%`,
                   }}
                 />
               </div>
+            </div>
+
+            {filteredImages.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border p-12 text-center">
+                <ImageIcon className="mx-auto mb-4 size-8 text-muted-foreground" />
+                <p className="font-display text-xl font-light">
+                  Nenhuma referência disponível ainda
+                </p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  O estúdio ainda está adicionando fotos. Continue e deixe uma observação.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {filteredImages.map((img) => {
+                  const isSelected = chosenRefIds.includes(img.id);
+                  const selectionOrder = chosenRefIds.indexOf(img.id) + 1;
+                  return (
+                    <button
+                      key={img.id}
+                      type="button"
+                      onClick={() => toggleRef(img.id)}
+                      className={cn(
+                        "group relative overflow-hidden rounded-xl aspect-[3/4] transition-all duration-200",
+                        isSelected
+                          ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-[1.02]"
+                          : "opacity-80 hover:opacity-100",
+                      )}
+                    >
+                      {img.imageUrl ? (
+                        <img
+                          src={img.imageUrl}
+                          alt=""
+                          loading="lazy"
+                          className="size-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex size-full items-center justify-center bg-muted">
+                          <ImageIcon className="size-8 text-muted-foreground" />
+                        </div>
+                      )}
+                      {isSelected ? (
+                        <span className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-full bg-foreground text-sm font-medium text-background shadow-md">
+                          {selectionOrder}
+                        </span>
+                      ) : (
+                        <span className="absolute right-2 top-2 size-8 rounded-full border-2 border-white/60 bg-black/20 opacity-0 transition-opacity group-hover:opacity-100" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {chosenRefIds.length > 0 && chosenRefIds.length < order.photoCount ? (
+              <p className="mt-4 text-center text-sm text-muted-foreground">
+                Pode enviar com {chosenRefIds.length}{" "}
+                {chosenRefIds.length === 1 ? "foto" : "fotos"} — as restantes serão variações
+                naturais do mesmo estilo.
+              </p>
             ) : null}
           </StepShell>
         ) : null}
 
-        {step === "acessorio" ? (
+        {/* ── Enquadramento ────────────────────────────────────────────────── */}
+        {step === "enquadramento" ? (
           <StepShell
-            eyebrow="Acessórios"
-            title="Quer incluir algum acessório?"
-            hint="Pode escolher mais de um, ou seguir sem nenhum."
+            eyebrow="Enquadramento"
+            title="Nas fotos, você quer aparecer:"
+            hint="Como a câmera vai te capturar. Vale para todas as fotos."
           >
-            <VisualGrid
-              multi
-              items={itemsOf("acessorio")}
-              selected={picked["acessorio"] ?? []}
-              onToggle={(id) => toggle("acessorio", id, true)}
+            <OptionList
+              options={FRAMING_OPTIONS}
+              value={config.framing}
+              onSelect={(value) => {
+                patchConfig({ framing: value });
+                autoAdvance(280);
+              }}
             />
           </StepShell>
         ) : null}
 
-        {step === "paleta" ? (
+        {/* ── Roupa ────────────────────────────────────────────────────────── */}
+        {step === "roupa" ? (
           <StepShell
-            eyebrow="Cores"
-            title="Qual paleta você gosta mais?"
-            hint="É o clima de cor geral das imagens."
+            eyebrow="Roupa"
+            title="Sobre a roupa do ensaio:"
+            hint="As fotos de referência podem ter estilos diferentes — você decide se mantém ou varia."
           >
-            <div className="grid grid-cols-2 gap-4">
-              {PALETTE_OPTIONS.map((palette) => {
-                const active = config.color_palette === palette.value;
-                return (
-                  <button
-                    key={palette.value}
-                    type="button"
-                    onClick={() => {
-                      patchConfig({ color_palette: palette.value });
-                      autoAdvance(280);
-                    }}
-                    className={cn(
-                      "overflow-hidden rounded-lg border text-left transition-colors",
-                      active ? "border-foreground ring-1 ring-foreground" : "border-border",
-                    )}
-                  >
-                    <span className="flex h-20">
-                      {palette.colors.map((color) => (
-                        <span key={color} className="flex-1" style={{ background: color }} />
-                      ))}
-                    </span>
-                    <span className="block p-3 font-display text-lg font-light">
-                      {palette.label}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+            <OptionList
+              options={OUTFIT_MODES}
+              value={config.outfit_mode}
+              onSelect={(value) => {
+                patchConfig({ outfit_mode: value });
+                autoAdvance(280);
+              }}
+            />
           </StepShell>
         ) : null}
 
-        {step === "pose"
-          ? (() => {
-              const chosen = (picked["pose"] ?? []).length;
-              const remaining = order.photoCount - chosen;
-              return (
-                <StepShell
-                  eyebrow="Poses"
-                  title={`Escolha até ${order.photoCount} poses`}
-                  hint="A ordem que você tocar é a ordem das fotos. Só a pose muda entre elas."
-                >
-                  <div className="mb-5 rounded-lg border border-border bg-card p-4">
-                    <div className="flex items-baseline justify-between">
-                      <p className="text-sm text-muted-foreground">
-                        {chosen} de {order.photoCount} escolhidas
-                      </p>
-                      <p className="font-display text-lg font-light">
-                        {remaining <= 0 ? "Completo" : `Faltam ${remaining}`}
-                      </p>
-                    </div>
-                    <div className="mt-3 h-px w-full bg-border">
+        {/* ── Cabelo ───────────────────────────────────────────────────────── */}
+        {step === "cabelo" ? (
+          <StepShell
+            eyebrow="Cabelo"
+            title="Como você quer o cabelo?"
+            hint={
+              chosenRefs.length > 0
+                ? "Toque na foto onde o cabelo te agrada mais. Ou escolha a última opção."
+                : "Escolha como você prefere."
+            }
+          >
+            {chosenRefs.length > 0 ? (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {chosenRefs.map((img, idx) => {
+                  const isSelected = config.hair === img.id;
+                  return (
+                    <button
+                      key={img.id}
+                      type="button"
+                      onClick={() => {
+                        patchConfig({ hair: img.id });
+                        autoAdvance(280);
+                      }}
+                      className={cn(
+                        "group relative overflow-hidden rounded-xl aspect-[3/4] transition-all duration-200",
+                        isSelected
+                          ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-[1.02]"
+                          : "opacity-75 hover:opacity-100",
+                      )}
+                    >
+                      {img.imageUrl ? (
+                        <img
+                          src={img.imageUrl}
+                          alt={`Referência ${idx + 1}`}
+                          loading="lazy"
+                          className="size-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex size-full items-center justify-center bg-muted">
+                          <ImageIcon className="size-6 text-muted-foreground" />
+                        </div>
+                      )}
                       <div
-                        className="h-px bg-foreground transition-all duration-500"
-                        style={{
-                          width: `${Math.min(100, Math.round((chosen / Math.max(1, order.photoCount)) * 100))}%`,
-                        }}
-                      />
-                    </div>
-                    {remaining > 0 && chosen > 0 ? (
-                      <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-                        Você pode enviar assim: as {remaining}{" "}
-                        {remaining === 1 ? "foto restante" : "fotos restantes"} serão variações
-                        naturais dentro do mesmo estilo.
-                      </p>
-                    ) : null}
-                    {remaining < 0 ? (
-                      <p className="mt-3 text-xs leading-relaxed text-destructive">
-                        Você escolheu mais poses do que o seu pacote de {order.photoCount} fotos.
-                      </p>
-                    ) : null}
-                  </div>
-                  <VisualGrid
-                    multi
-                    items={itemsOf("pose")}
-                    selected={picked["pose"] ?? []}
-                    onToggle={(id) => toggle("pose", id, true, order.photoCount)}
-                  />
-                </StepShell>
-              );
-            })()
-          : null}
-
-        {step === "detalhes" ? (
-          <StepShell
-            eyebrow="Últimos detalhes"
-            title="Falta pouco"
-            hint="Duas perguntas rápidas e terminamos."
-          >
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="visible_text" className="font-display text-xl font-light">
-                  Algum texto, número ou idade deve aparecer na cena?
-                </Label>
-                <Textarea
-                  id="visible_text"
-                  rows={3}
-                  placeholder="Ex: o número 30 em um balão. Se não quiser nada, deixe em branco."
-                  value={config.visible_text_answer}
-                  onChange={(event) => patchConfig({ visible_text_answer: event.target.value })}
-                />
+                        className={cn(
+                          "absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-3 text-white transition-opacity",
+                          isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+                        )}
+                      >
+                        <p className="text-xs font-medium">
+                          {isSelected ? "✓ Esse cabelo" : `Foto ${idx + 1}`}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="notes" className="font-display text-xl font-light">
-                  Quer nos contar mais alguma coisa?
-                </Label>
-                <Textarea
-                  id="notes"
-                  rows={4}
-                  placeholder="Qualquer observação importante para o seu ensaio."
-                  value={config.special_notes}
-                  onChange={(event) => patchConfig({ special_notes: event.target.value })}
-                />
-              </div>
-            </div>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => {
+                patchConfig({ hair: "manter" });
+                autoAdvance(280);
+              }}
+              className={cn(
+                "mt-4 flex w-full items-start gap-4 rounded-xl border p-4 text-left transition-all",
+                config.hair === "manter"
+                  ? "border-foreground bg-secondary"
+                  : "border-border hover:border-foreground/40",
+              )}
+            >
+              <span className="flex-1">
+                <span className="block font-display text-xl font-light">
+                  Manter o cabelo como estou
+                </span>
+                <span className="mt-1 block text-sm text-muted-foreground">
+                  Nas fotos de identidade que você vai nos enviar
+                </span>
+              </span>
+              {config.hair === "manter" ? <Check className="mt-1 size-5 shrink-0" /> : null}
+            </button>
           </StepShell>
         ) : null}
 
+        {/* ── Observações ──────────────────────────────────────────────────── */}
+        {step === "observacoes" ? (
+          <StepShell
+            eyebrow="Quase lá!"
+            title="Quer nos contar mais alguma coisa?"
+            hint="Qualquer detalhe importante para o seu ensaio. Se não tiver nada, pode deixar em branco."
+          >
+            <Textarea
+              id="notes"
+              rows={5}
+              placeholder="Ex: tenho cabelo curto. Prefiro tons mais escuros. Tenho alergia a determinado produto. Pode ter texto na foto..."
+              value={config.special_notes}
+              onChange={(event) => patchConfig({ special_notes: event.target.value })}
+            />
+          </StepShell>
+        ) : null}
+
+        {/* ── Resumo ───────────────────────────────────────────────────────── */}
         {step === "resumo" ? (
           <StepShell
             eyebrow="Revisão"
-            title={config.confirmed ? "Tudo enviado" : "Confira suas escolhas"}
+            title={config.confirmed ? "Tudo enviado ✓" : "Confira suas escolhas"}
             hint={
               config.confirmed
-                ? "O estúdio já recebeu o seu ensaio. Se quiser mudar algo, fale com a equipe."
-                : "Se algo não estiver certo, volte e ajuste antes de enviar."
+                ? "O estúdio já recebeu tudo. Se quiser mudar algo, fale com a equipe."
+                : "Se algo não estiver certo, use os botões de editar para ajustar."
             }
           >
+            {/* Referências escolhidas */}
+            {chosenRefs.length > 0 ? (
+              <div className="mb-6">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="eyebrow">
+                    {chosenRefs.length} {chosenRefs.length === 1 ? "referência" : "referências"}{" "}
+                    escolhida{chosenRefs.length !== 1 ? "s" : ""}
+                  </p>
+                  {!config.confirmed ? (
+                    <button
+                      type="button"
+                      onClick={() => setStepIndex(steps.indexOf("galeria"))}
+                      className="text-xs text-muted-foreground underline underline-offset-2"
+                    >
+                      editar
+                    </button>
+                  ) : null}
+                </div>
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {chosenRefs.map((img, idx) => (
+                    <div key={img.id} className="aspect-[3/4] overflow-hidden rounded-lg">
+                      {img.imageUrl ? (
+                        <img
+                          src={img.imageUrl}
+                          alt={`Referência ${idx + 1}`}
+                          className="size-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex size-full items-center justify-center bg-muted">
+                          <ImageIcon className="size-4 text-muted-foreground" />
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            {/* Resumo das escolhas */}
             <dl className="divide-y divide-border rounded-lg border border-border bg-card">
-              {[
-                {
-                  label: "Tipo de ensaio",
-                  value: SESSION_TYPES.find((t) => t.value === config.session_type)?.label,
-                  stepId: "tipo" as StepId,
-                },
-                {
-                  label: "Fotos",
-                  value: `${order.photoCount}`,
-                  stepId: "boas-vindas" as StepId,
-                },
-                {
-                  label: "Enquadramento",
-                  value: FRAMING_OPTIONS.find((f) => f.value === config.framing)?.label,
-                  stepId: "essenciais" as StepId,
-                },
-                {
-                  label: "Roupa",
-                  value: OUTFIT_MODES.find((o) => o.value === config.outfit_mode)?.label,
-                  stepId: "essenciais" as StepId,
-                },
-                {
-                  label: "Maquiagem",
-                  value: MAKEUP_OPTIONS.find((m) => m.value === config.makeup)?.label,
-                  stepId: "essenciais" as StepId,
-                },
-                {
-                  label: "Cabelo",
-                  value: HAIR_OPTIONS.find((h) => h.value === config.hair)?.label,
-                  stepId: "essenciais" as StepId,
-                },
-                {
-                  label: "Look",
-                  value: catalog.find((item) => item.id === (picked["look"] ?? [])[0])?.name,
-                  stepId: "look" as StepId,
-                },
-                {
-                  label: "Cenário",
-                  value: catalog.find((item) => item.id === (picked["cenario"] ?? [])[0])?.name,
-                  stepId: "cenario" as StepId,
-                },
-                {
-                  label: "Luz",
-                  value: MOOD_OPTIONS.find((m) => m.value === config.lighting_mood)?.label,
-                  stepId: "iluminacao" as StepId,
-                },
-                {
-                  label: "Paleta",
-                  value: PALETTE_OPTIONS.find((p) => p.value === config.color_palette)?.label,
-                  stepId: "paleta" as StepId,
-                },
-                {
-                  label: "Acessórios",
-                  value:
-                    (picked["acessorio"] ?? []).length > 0
-                      ? `${(picked["acessorio"] ?? []).length} selecionado(s)`
-                      : "Nenhum",
-                  stepId: "acessorio" as StepId,
-                },
-                {
-                  label: "Poses escolhidas",
-                  value: `${(picked["pose"] ?? []).length} de ${order.photoCount}`,
-                  stepId: "pose" as StepId,
-                },
-              ].map(({ label, value, stepId }) => {
+              {(
+                [
+                  {
+                    label: "Tipo de ensaio",
+                    value: SESSION_TYPES.find((t) => t.value === config.session_type)?.label,
+                    stepId: "tipo" as StepId,
+                  },
+                  {
+                    label: "Maquiagem",
+                    value: MAKEUP_OPTIONS.find((m) => m.value === config.makeup)?.label,
+                    stepId: "maquiagem" as StepId,
+                  },
+                  {
+                    label: "Enquadramento",
+                    value: FRAMING_OPTIONS.find((f) => f.value === config.framing)?.label,
+                    stepId: "enquadramento" as StepId,
+                  },
+                  {
+                    label: "Roupa",
+                    value: OUTFIT_MODES.find((o) => o.value === config.outfit_mode)?.label,
+                    stepId: "roupa" as StepId,
+                  },
+                  {
+                    label: "Cabelo",
+                    value:
+                      config.hair === "manter"
+                        ? "Manter como estou"
+                        : config.hair
+                          ? `Cabelo da foto ${(chosenRefIds.indexOf(config.hair) + 1) || "de referência"}`
+                          : undefined,
+                    stepId: "cabelo" as StepId,
+                  },
+                  {
+                    label: "Observações",
+                    value: config.special_notes || "Nenhuma",
+                    stepId: "observacoes" as StepId,
+                  },
+                ] satisfies { label: string; value: string | undefined; stepId: StepId }[]
+              ).map(({ label, value, stepId }) => {
                 const targetIdx = steps.indexOf(stepId);
                 const canJump = !config.confirmed && targetIdx !== -1;
                 return (
@@ -754,30 +777,23 @@ function EnsaioPage() {
             </dl>
 
             {!config.confirmed ? (
-              <>
-                {(picked["pose"] ?? []).length > 0 &&
-                (picked["pose"] ?? []).length < order.photoCount ? (
-                  <p className="mt-6 text-sm text-muted-foreground">
-                    Você escolheu {(picked["pose"] ?? []).length} de {order.photoCount} poses. As
-                    demais fotos serão variações naturais do mesmo estilo.
-                  </p>
-                ) : null}
-                <Button
-                  className="mt-8 w-full"
-                  size="lg"
-                  disabled={confirm.isPending}
-                  onClick={() => confirm.mutate()}
-                >
-                  {confirm.isPending ? "Enviando..." : "Enviar para o estúdio"}
-                </Button>
-              </>
+              <Button
+                className="mt-8 w-full"
+                size="lg"
+                disabled={confirm.isPending}
+                onClick={() => confirm.mutate()}
+              >
+                <MessageCircle className="mr-2 size-4" />
+                {confirm.isPending ? "Enviando..." : "Enviar pelo WhatsApp"}
+              </Button>
             ) : (
               <div className="mt-8 space-y-4">
                 <div className="flex items-center gap-3 rounded-lg border border-border bg-secondary p-5">
                   <Check className="size-5 shrink-0" />
                   <p className="text-sm">
-                    Recebido! Agora envie suas fotos de identidade pelo WhatsApp do estúdio — de 3 a
-                    5 fotos de rosto e 1 de corpo inteiro. É delas que vem o seu rosto nas imagens.
+                    Recebido! Agora envie suas fotos de identidade pelo WhatsApp do estúdio — de 3
+                    a 5 fotos de rosto e 1 de corpo inteiro. É delas que vem o seu rosto nas
+                    imagens.
                   </p>
                 </div>
                 <Button asChild size="lg" className="w-full">
@@ -802,6 +818,7 @@ function EnsaioPage() {
         ) : null}
       </main>
 
+      {/* ── Navegação fixa na base ────────────────────────────────────────── */}
       <footer className="fixed inset-x-0 bottom-0 border-t border-border bg-background/95 backdrop-blur">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-4 px-5 py-4">
           <Button
@@ -822,6 +839,7 @@ function EnsaioPage() {
                 const next = Math.min(steps.length - 1, stepIndex + 1);
                 setStepIndex(next);
                 patchConfig({ current_step: next });
+                window.scrollTo({ top: 0, behavior: "smooth" });
               }}
             >
               Continuar
@@ -833,6 +851,8 @@ function EnsaioPage() {
     </div>
   );
 }
+
+// ─── Componentes auxiliares ─────────────────────────────────────────────────
 
 function StepShell({
   eyebrow,
@@ -854,15 +874,6 @@ function StepShell({
       {hint ? <p className="mt-3 text-sm text-muted-foreground">{hint}</p> : null}
       <div className="mt-8">{children}</div>
     </section>
-  );
-}
-
-function Group({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <p className="eyebrow mb-3">{label}</p>
-      {children}
-    </div>
   );
 }
 

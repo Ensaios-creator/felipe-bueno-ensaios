@@ -33,13 +33,13 @@ export type Database = {
         Insert: {
           active?: boolean
           ai_description?: string
-          category: string
-          code: string
+          category?: string
+          code?: string
           color?: string | null
           created_at?: string
           id?: string
           image_url?: string | null
-          name: string
+          name?: string
           position?: number
           style?: string | null
           tags?: string[]

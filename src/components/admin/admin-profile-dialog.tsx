@@ -555,7 +555,7 @@ export function AdminProfileDialog({
                     </div>
                     <div>
                       <p className="font-display text-sm font-medium">Groq</p>
-                      <p className="text-[0.62rem] text-muted-foreground">Llama 3.2 Vision</p>
+                      <p className="text-[0.62rem] text-muted-foreground">Llama 4 Maverick</p>
                     </div>
 
                     {/* Status Badge Animado */}
@@ -584,7 +584,7 @@ export function AdminProfileDialog({
                     </div>
                     <div>
                       <p className="font-display text-sm font-medium">Gemini</p>
-                      <p className="text-[0.62rem] text-muted-foreground">2.0 / 1.5 Flash</p>
+                      <p className="text-[0.62rem] text-muted-foreground">3.5 / 2.5 Flash</p>
                     </div>
 
                     {/* Status Badge Animado */}
@@ -698,7 +698,7 @@ export function AdminProfileDialog({
                       <Zap className="size-3 text-amber-500" />
                       Chave API Groq (gsk_...)
                     </Label>
-                    <span className="text-[0.65rem] text-muted-foreground">Llama 3.2 11B/90B</span>
+                    <span className="text-[0.65rem] text-muted-foreground">Llama 4 Maverick Vision</span>
                   </div>
                   <div className="relative">
                     <Input
@@ -726,7 +726,7 @@ export function AdminProfileDialog({
                       <Sparkles className="size-3 text-blue-500" />
                       Chave API Google Gemini
                     </Label>
-                    <span className="text-[0.65rem] text-muted-foreground">Gemini 2.0 / 1.5 Flash</span>
+                    <span className="text-[0.65rem] text-muted-foreground">Gemini 3.5 / 2.5 Flash</span>
                   </div>
                   <div className="relative">
                     <Input

@@ -133,12 +133,15 @@ function cleanAndParseJson(text: string): ImageAiClassification {
   };
 }
 
-// ─── CLASSIFICADOR GROQ (LLaMA 3.2 Vision) ──────────────────────────────────
+// ─── CLASSIFICADOR GROQ (LLaMA 4 Maverick Vision) ───────────────────────────
 async function classifyWithGroq(
   imageDataUrl: string,
   apiKey: string,
 ): Promise<ImageAiClassification> {
-  const model = "llama-3.2-11b-vision-preview";
+  // llama-3.2-11b-vision-preview foi descontinuado pela Groq em 2025.
+  // llama-4-scout-17b-16e-instruct foi descontinuado em Jun/2026.
+  // Usando llama-4-maverick-17b-128e-instruct (multimodal nativo, suporte a imagens).
+  const model = "meta-llama/llama-4-maverick-17b-128e-instruct";
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -188,7 +191,9 @@ async function classifyWithGemini(
   const mimeType = match[1] ?? "image/jpeg";
   const base64Data = match[2] ?? "";
 
-  const models = ["gemini-2.0-flash", "gemini-1.5-flash"];
+  // gemini-2.0-flash foi descontinuado em Jun/2026, gemini-1.5-flash também.
+  // Usando a geração atual (Gemini 3.x) com fallback progressivo.
+  const models = ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-3.1-flash-lite"];
   let lastError: Error | null = null;
 
   for (const model of models) {
@@ -246,11 +251,16 @@ async function classifyWithOpenRouter(
   imageDataUrl: string,
   apiKey: string,
 ): Promise<ImageAiClassification> {
+  // Modelos free com suporte a visão disponíveis em Agosto/2026:
+  // - llama-3.2-11b-vision-instruct foi descontinuado na maioria dos providers.
+  // - google/gemini-2.0-flash-exp:free foi removido junto com gemini-2.0-flash.
+  // - Usando modelos atuais com visão: Nemotron VL, Gemma 4 e Llama 4 Maverick.
   const models = [
-    "meta-llama/llama-3.2-11b-vision-instruct:free",
-    "google/gemini-2.0-flash-exp:free",
-    "qwen/qwen-2-vl-72b-instruct:free",
-    "meta-llama/llama-3.2-11b-vision-instruct",
+    "nvidia/nemotron-nano-12b-v2-vl:free",
+    "google/gemma-4-31b-it:free",
+    "google/gemma-4-26b-a4b-it:free",
+    "meta-llama/llama-4-maverick-17b-128e-instruct:free",
+    "openrouter/auto",
   ];
 
   let lastError: Error | null = null;
@@ -280,8 +290,11 @@ async function classifyWithOpenRouter(
               ],
             },
           ],
-          response_format: { type: "json_object" },
+          // Não forçamos response_format: json_object pois nem todos os modelos
+          // free do OpenRouter suportam JSON mode — cleanAndParseJson já trata
+          // respostas em texto e markdown code blocks.
           temperature: 0.1,
+          max_tokens: 1024,
         }),
       });
 
@@ -402,7 +415,7 @@ export async function checkProviderHealth(
         status: "online",
         latencyMs,
         message: `Online e pronto (${latencyMs}ms)`,
-        detail: "LLaMA 3.2 Vision respondendo normalmente.",
+        detail: "LLaMA 4 Maverick Vision respondendo normalmente.",
         checkedAt: now,
       };
     }
@@ -415,7 +428,7 @@ export async function checkProviderHealth(
         status: "online",
         latencyMs,
         message: `Online e pronto (${latencyMs}ms)`,
-        detail: "Google Gemini Flash respondendo normalmente.",
+        detail: "Google Gemini 3.5 Flash respondendo normalmente.",
         checkedAt: now,
       };
     }
@@ -428,7 +441,7 @@ export async function checkProviderHealth(
         status: "online",
         latencyMs,
         message: `Online e pronto (${latencyMs}ms)`,
-        detail: "OpenRouter Vision respondendo normalmente.",
+        detail: "OpenRouter Vision (Nemotron / Gemma 4) respondendo normalmente.",
         checkedAt: now,
       };
     }

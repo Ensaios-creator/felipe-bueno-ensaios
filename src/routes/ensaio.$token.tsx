@@ -149,6 +149,33 @@ function EnsaioPage() {
     }
   }, [hasRestoredStep, query.data?.config?.current_step, steps.length]);
 
+  // Auto-avança da galeria quando o cliente preenche todas as fotos
+  const currentStep = steps[stepIndex] ?? "boas-vindas";
+  const currentChosenRefIds = (selections ?? query.data?.selections ?? {})["referencia"] ?? [];
+  const orderPhotoCount = query.data?.order?.photoCount ?? 0;
+  const [galleryAutoAdvanced, setGalleryAutoAdvanced] = useState(false);
+  useEffect(() => {
+    if (
+      currentStep === "galeria" &&
+      orderPhotoCount > 0 &&
+      currentChosenRefIds.length >= orderPhotoCount &&
+      !galleryAutoAdvanced
+    ) {
+      setGalleryAutoAdvanced(true);
+      setTimeout(() => {
+        setStepIndex((idx) => {
+          const next = Math.min(steps.length - 1, idx + 1);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+          return next;
+        });
+      }, 700);
+    }
+    // Reset flag when leaving gallery step
+    if (currentStep !== "galeria") {
+      setGalleryAutoAdvanced(false);
+    }
+  }, [currentStep, currentChosenRefIds.length, orderPhotoCount, galleryAutoAdvanced, steps.length]);
+
   if (query.isLoading) {
     return (
       <Centered>
@@ -432,72 +459,111 @@ function EnsaioPage() {
           <StepShell
             eyebrow="Passo 2"
             title="Conta um pouco mais"
-            hint="Essas informações rápidas ajudam a filtrar as melhores fotos para você."
+            hint="Responda cada pergunta tocando na opção. Vamos avançar automaticamente."
           >
-            <div className="space-y-6">
-              {(CATEGORY_QUESTIONS[config.session_type ?? ""] ?? []).map((question) => {
-                const value = config.category_answers?.[question.key];
-                const update = (next: string | number | boolean | null) =>
-                  patchConfig({
-                    category_answers: { ...config.category_answers, [question.key]: next },
-                  });
+            {(() => {
+              const allQuestions = CATEGORY_QUESTIONS[config.session_type ?? ""] ?? [];
+              const choiceQuestions = allQuestions.filter((q) => q.type === "choice");
+              const answeredChoices = choiceQuestions.filter(
+                (q) => typeof config.category_answers?.[q.key] === "string" && config.category_answers[q.key],
+              );
+              const allChoicesAnswered =
+                choiceQuestions.length === 0 || answeredChoices.length === choiceQuestions.length;
 
-                if (question.type === "choice") {
-                  return (
-                    <div key={question.key}>
-                      <p className="mb-3 font-display text-xl font-light">{question.label}</p>
-                      <OptionList
-                        options={question.options.map((label) => ({ value: label, label }))}
-                        value={typeof value === "string" ? value : null}
-                        onSelect={(val) => {
-                          update(val);
-                          const totalQuestions = (
-                            CATEGORY_QUESTIONS[config.session_type ?? ""] ?? []
-                          ).filter((q) => q.type === "choice").length;
-                          if (totalQuestions === 1) autoAdvance(280);
-                        }}
-                      />
+              return (
+                <div className="space-y-8">
+                  {/* Progresso das perguntas */}
+                  {choiceQuestions.length > 1 ? (
+                    <div className="flex items-center gap-2">
+                      {choiceQuestions.map((q, idx) => {
+                        const answered = typeof config.category_answers?.[q.key] === "string" && config.category_answers[q.key];
+                        return (
+                          <div
+                            key={q.key}
+                            className={cn(
+                              "h-1 flex-1 rounded-full transition-all duration-500",
+                              answered ? "bg-foreground" : idx === answeredChoices.length ? "bg-foreground/30 animate-pulse" : "bg-border/50",
+                            )}
+                          />
+                        );
+                      })}
                     </div>
-                  );
-                }
+                  ) : null}
 
-                if (question.type === "boolean") {
-                  return (
-                    <label
-                      key={question.key}
-                      className="flex items-center justify-between gap-4 rounded-xl border border-border/80 bg-card/60 p-4"
-                    >
-                      <span className="font-display text-xl font-light">{question.label}</span>
-                      <Switch checked={value === true} onCheckedChange={update} />
-                    </label>
-                  );
-                }
+                  {allQuestions.map((question) => {
+                    const value = config.category_answers?.[question.key];
+                    const update = (next: string | number | boolean | null) => {
+                      const newAnswers = { ...config.category_answers, [question.key]: next };
+                      patchConfig({ category_answers: newAnswers });
 
-                return (
-                  <div key={question.key} className="space-y-2">
-                    <Label htmlFor={question.key} className="font-display text-xl font-light">
-                      {question.label}
-                    </Label>
-                    <Input
-                      id={question.key}
-                      type={question.type === "number" ? "number" : "text"}
-                      placeholder={(question as { placeholder?: string }).placeholder}
-                      value={value === null || value === undefined ? "" : String(value)}
-                      onChange={(event) =>
-                        update(
-                          question.type === "number"
-                            ? Number(event.target.value) || null
-                            : event.target.value,
-                        )
+                      // Auto-advance quando a última pergunta choice é respondida
+                      if (question.type === "choice") {
+                        const updatedChoicesDone = choiceQuestions.filter(
+                          (q) => q.key === question.key ? true : (typeof newAnswers[q.key] === "string" && newAnswers[q.key]),
+                        );
+                        if (updatedChoicesDone.length === choiceQuestions.length) {
+                          autoAdvance(350);
+                        }
                       }
-                      className="h-12 text-base"
-                    />
-                  </div>
-                );
-              })}
-            </div>
+                    };
 
-            <StudioTip text="Suas respostas são usadas para que a galeria traga apenas fotos compatíveis com a sua celebração ou projeto." />
+                    if (question.type === "choice") {
+                      return (
+                        <div key={question.key}>
+                          <p className="mb-3 font-display text-xl font-light">{question.label}</p>
+                          <OptionList
+                            options={question.options.map((label) => ({ value: label, label }))}
+                            value={typeof value === "string" ? value : null}
+                            onSelect={(val) => update(val)}
+                          />
+                        </div>
+                      );
+                    }
+
+                    if (question.type === "boolean") {
+                      return (
+                        <label
+                          key={question.key}
+                          className="flex items-center justify-between gap-4 rounded-xl border border-border/80 bg-card/60 p-4"
+                        >
+                          <span className="font-display text-xl font-light">{question.label}</span>
+                          <Switch checked={value === true} onCheckedChange={update} />
+                        </label>
+                      );
+                    }
+
+                    return (
+                      <div key={question.key} className="space-y-2">
+                        <Label htmlFor={question.key} className="font-display text-xl font-light">
+                          {question.label}
+                        </Label>
+                        <Input
+                          id={question.key}
+                          type={question.type === "number" ? "number" : "text"}
+                          placeholder={(question as { placeholder?: string }).placeholder}
+                          value={value === null || value === undefined ? "" : String(value)}
+                          onChange={(event) =>
+                            update(
+                              question.type === "number"
+                                ? Number(event.target.value) || null
+                                : event.target.value,
+                            )
+                          }
+                          className="h-12 text-base"
+                        />
+                      </div>
+                    );
+                  })}
+
+                  {/* CTA manual para quando só há perguntas de texto/número/boolean */}
+                  {allChoicesAnswered && choiceQuestions.length === 0 ? (
+                    <p className="text-center text-xs text-muted-foreground">Preencha os campos acima e toque em <strong>Continuar</strong> na parte de baixo da tela.</p>
+                  ) : null}
+                </div>
+              );
+            })()}
+
+            <StudioTip text="Suas respostas ajudam a filtrar apenas fotos compatíveis com o seu ensaio. Quanto mais você preencher, melhores serão as sugestões!" />
           </StepShell>
         ) : null}
 
@@ -643,10 +709,20 @@ function EnsaioPage() {
               </div>
             )}
 
-            <StudioTip
-              title="Dica de Escolha"
-              text="Não se preocupe com o rosto da modelo — o seu rosto e suas características virão das fotos que você enviar no WhatsApp. Escolha as fotos onde você gostar da roupa, pose e iluminação!"
-            />
+            {/* Auto-avança quando todas as fotos são selecionadas */}
+            {chosenRefIds.length >= order.photoCount && chosenRefIds.length > 0 ? (
+              <div className="mt-6 flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/8 p-4 animate-in fade-in-50 duration-300">
+                <CheckCircle2 className="size-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                <p className="text-sm text-emerald-800 dark:text-emerald-300 font-medium">
+                  Perfeito! Suas {order.photoCount} {order.photoCount === 1 ? "foto foi selecionada" : "fotos foram selecionadas"}. Avançando...
+                </p>
+              </div>
+            ) : (
+              <StudioTip
+                title="Dica de Escolha"
+                text="Não se preocupe com o rosto da modelo — o seu rosto e suas características virão das fotos que você enviar no WhatsApp. Escolha as fotos onde você gostar da roupa, pose e iluminação!"
+              />
+            )}
           </StepShell>
         ) : null}
 
@@ -787,7 +863,7 @@ function EnsaioPage() {
           <StepShell
             eyebrow="Passo 8"
             title="Quer nos contar mais alguma coisa?"
-            hint="Espaço livre para observações, detalhes do seu estilo ou preferências."
+            hint="Campo opcional — se não tiver nada a dizer, basta tocar em Continuar abaixo."
           >
             <Textarea
               id="notes"
@@ -798,9 +874,24 @@ function EnsaioPage() {
               className="text-base p-4"
             />
 
+            {/* CTA explícita para avançar */}
+            <button
+              type="button"
+              onClick={() => {
+                const next = Math.min(steps.length - 1, stepIndex + 1);
+                setStepIndex(next);
+                patchConfig({ current_step: next });
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              className="mt-5 flex w-full items-center justify-center gap-3 rounded-xl border-2 border-foreground/70 bg-foreground text-background py-4 text-base font-semibold shadow-editorial transition-all hover:bg-foreground/90 active:scale-[0.98]"
+            >
+              Continuar para a revisão
+              <ArrowRight className="size-5" />
+            </button>
+
             <StudioTip
               title="Opcional"
-              text="Se não tiver nenhuma observação, pode deixar em branco e clicar em 'Continuar' para revisar suas escolhas."
+              text="Se não tiver nenhuma observação, pode tocar em 'Continuar para a revisão' acima."
             />
           </StepShell>
         ) : null}
@@ -986,40 +1077,80 @@ function EnsaioPage() {
       </main>
 
       {/* ── Navegação Fixa Inferior ────────────────────────────────────────── */}
-      <footer className="fixed inset-x-0 bottom-0 border-t border-border/80 bg-background/95 backdrop-blur-md z-10">
-        <div className="mx-auto flex max-w-2xl items-center justify-between gap-4 px-5 py-3.5">
-          <Button
-            variant="ghost"
-            onClick={() => {
-              const prev = Math.max(0, stepIndex - 1);
-              setStepIndex(prev);
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-            disabled={stepIndex === 0}
-            className="gap-2 text-xs uppercase tracking-wider"
+      <footer className="fixed inset-x-0 bottom-0 z-10">
+        {/* Botão CTA grande e proeminente quando o passo está válido */}
+        {step !== "resumo" && step !== "boas-vindas" && step !== "observacoes" ? (
+          <div
+            className={cn(
+              "mx-auto max-w-2xl px-4 transition-all duration-500",
+              stepValid ? "pb-1 pt-2" : "pb-0 pt-0 pointer-events-none opacity-0 h-0 overflow-hidden",
+            )}
           >
-            <ArrowLeft className="size-4" />
-            Voltar
-          </Button>
-
-          {step !== "resumo" && step !== "boas-vindas" ? (
-            <Button
+            <button
+              type="button"
               onClick={() => {
-                if (!stepValid) {
-                  toast.info("Faça uma escolha para continuar.");
-                  return;
-                }
                 const next = Math.min(steps.length - 1, stepIndex + 1);
                 setStepIndex(next);
                 patchConfig({ current_step: next });
                 window.scrollTo({ top: 0, behavior: "smooth" });
               }}
-              className="gap-2 text-xs uppercase tracking-wider font-semibold"
+              className="w-full flex items-center justify-center gap-3 rounded-2xl bg-foreground text-background py-4 text-base font-semibold shadow-2xl shadow-foreground/20 transition-transform active:scale-[0.98] animate-in fade-in-50 slide-in-from-bottom-2 duration-300"
             >
-              Continuar
-              <ArrowRight className="size-4" />
+              {step === "galeria" ? (
+                chosenRefIds.length < order.photoCount ? (
+                  <>{chosenRefIds.length > 0 ? `${chosenRefIds.length} de ${order.photoCount} fotos escolhidas` : "Escolha as fotos acima"} <ArrowRight className="size-5" /></>
+                ) : (
+                  <>Continuar <ArrowRight className="size-5" /></>
+                )
+              ) : (
+                <>Continuar <ArrowRight className="size-5" /></>
+              )}
+            </button>
+          </div>
+        ) : null}
+
+        {/* Barra inferior com Voltar */}
+        <div className="border-t border-border/80 bg-background/95 backdrop-blur-md">
+          <div className="mx-auto flex max-w-2xl items-center justify-between gap-4 px-5 py-3">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                const prev = Math.max(0, stepIndex - 1);
+                setStepIndex(prev);
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              disabled={stepIndex === 0}
+              className="gap-2 text-xs uppercase tracking-wider text-muted-foreground"
+            >
+              <ArrowLeft className="size-4" />
+              Voltar
             </Button>
-          ) : null}
+
+            {/* Indicador de passo inválido com dica */}
+            {step !== "resumo" && step !== "boas-vindas" && step !== "observacoes" && !stepValid ? (
+              <span className="text-xs text-muted-foreground animate-pulse">
+                👆 Toque em uma opção acima
+              </span>
+            ) : null}
+
+            {/* Botão discreto no rodapé para galeria (pular) */}
+            {step === "galeria" && chosenRefIds.length > 0 ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const next = Math.min(steps.length - 1, stepIndex + 1);
+                  setStepIndex(next);
+                  patchConfig({ current_step: next });
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                className="gap-1 text-xs text-muted-foreground"
+              >
+                Continuar assim
+                <ArrowRight className="size-3" />
+              </Button>
+            ) : null}
+          </div>
         </div>
       </footer>
 

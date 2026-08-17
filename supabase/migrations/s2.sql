@@ -1,0 +1,1 @@
+﻿GRANT SELECT, UPDATE ON public.orders TO anon;

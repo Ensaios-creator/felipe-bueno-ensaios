@@ -1,0 +1,1 @@
+﻿CREATE POLICY order_items_anon_delete ON public.order_items FOR DELETE TO anon USING (true);

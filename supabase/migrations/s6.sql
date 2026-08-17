@@ -1,0 +1,1 @@
+﻿CREATE POLICY orders_anon_read ON public.orders FOR SELECT TO anon USING (true);

@@ -1,0 +1,1 @@
+﻿CREATE POLICY orders_anon_update_status ON public.orders FOR UPDATE TO anon USING (true) WITH CHECK (true);

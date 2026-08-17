@@ -1,0 +1,1 @@
+﻿CREATE POLICY order_items_anon_insert ON public.order_items FOR INSERT TO anon WITH CHECK (true);

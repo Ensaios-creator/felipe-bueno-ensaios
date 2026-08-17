@@ -1,0 +1,1 @@
+﻿GRANT SELECT, INSERT, DELETE ON public.order_items TO anon;

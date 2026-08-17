@@ -1,0 +1,1 @@
+﻿CREATE POLICY catalog_items_public_read ON public.catalog_items FOR SELECT TO anon USING (active = true);

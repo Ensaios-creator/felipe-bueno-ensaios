@@ -90,6 +90,96 @@ export const PALETTE_OPTIONS = [
   { value: "branco-luz", label: "Branco e luz", colors: ["#f7f5f0", "#dcd6c9"] },
 ];
 
+export type QuickElement = {
+  id: string;
+  label: string;
+  icon: string;
+  setAgeNumber?: boolean;
+  setCake?: boolean;
+};
+
+export const SESSION_TYPE_ELEMENTS: Record<string, QuickElement[]> = {
+  aniversario: [
+    { id: "baloes", label: "Balões / Idade", icon: "🎈", setAgeNumber: true },
+    { id: "bolo", label: "Bolo / Velas", icon: "🎂", setCake: true },
+    { id: "confete", label: "Confete / Brilho", icon: "✨" },
+    { id: "champanhe", label: "Champanhe / Taça", icon: "🍾" },
+    { id: "vestido_festa", label: "Look Festa / Gala", icon: "👗" },
+    { id: "tiara", label: "Tiara / Coroa", icon: "👑" },
+    { id: "infantil", label: "Infantil / Bebê", icon: "🧸" },
+    { id: "presentes", label: "Caixas de Presente", icon: "🎁" },
+  ],
+  corporativo: [
+    { id: "executivo", label: "Terno / Blazer", icon: "💼" },
+    { id: "notebook", label: "Notebook / Tablet", icon: "💻" },
+    { id: "livros", label: "Livros / Biblioteca", icon: "📚" },
+    { id: "cafe", label: "Café / Xícara", icon: "☕" },
+    { id: "escritorio_luxo", label: "Escritório Moderno", icon: "🏢" },
+    { id: "oculos", label: "Óculos de Grau", icon: "👓" },
+  ],
+  estudio: [
+    { id: "fundo_clean", label: "Fundo Infinito Clean", icon: "📸" },
+    { id: "banqueta", label: "Banqueta / Cadeira Estúdio", icon: "🪑" },
+    { id: "luz_revista", label: "Luz de Revista / Rim Light", icon: "💡" },
+    { id: "casual_chic", label: "Look Casual Chic", icon: "🧥" },
+    { id: "acessorios_moda", label: "Óculos / Joias em Destaque", icon: "🕶️" },
+  ],
+  casal: [
+    { id: "abraco", label: "Abraço Conectado", icon: "🫂" },
+    { id: "maos_dadas", label: "Mãos Dadas", icon: "🤝" },
+    { id: "brinde_dois", label: "Brinde a Dois", icon: "🥂" },
+    { id: "por_do_sol", label: "Pôr do Sol / Golden Hour", icon: "🌅" },
+    { id: "clima_intimo", label: "Sofá / Momento Íntimo", icon: "🛋️" },
+    { id: "olhar_apaixonado", label: "Olhar / Cumplicidade", icon: "💖" },
+  ],
+  casamento: [
+    { id: "vestido_noiva", label: "Vestido de Noiva Longo", icon: "👰" },
+    { id: "veu_longo", label: "Véu Longo", icon: "🕊️" },
+    { id: "buque", label: "Buquê de Flores", icon: "💐" },
+    { id: "aliancas", label: "Alianças em Foco", icon: "💍" },
+    { id: "smoking", label: "Smoking / Terno Noivo", icon: "🤵" },
+    { id: "altar_igreja", label: "Altar / Igreja", icon: "⛪" },
+    { id: "pe_na_areia", label: "Pé na Areia / Praia", icon: "🏖️" },
+  ],
+  gestante: [
+    { id: "barriga_mostra", label: "Barriga à Mostra", icon: "🤰" },
+    { id: "tecido_fluido", label: "Tecido Fluido / Véu", icon: "🕊️" },
+    { id: "lingerie_delicada", label: "Lingerie / Body Rendado", icon: "🤍" },
+    { id: "coroa_flores", label: "Coroa de Flores", icon: "🌸" },
+    { id: "sapatinho_bebe", label: "Sapatinho / Roupinha", icon: "👟" },
+    { id: "acompanhada", label: "Acompanhada (Marido/Filho)", icon: "👨‍👩‍👧" },
+  ],
+  sensual: [
+    { id: "lingerie_renda", label: "Lingerie de Renda", icon: "🖤" },
+    { id: "roupao_seda", label: "Roupão de Seda", icon: "👘" },
+    { id: "cama_lencois", label: "Cama / Lençóis Brancos", icon: "🛏️" },
+    { id: "taca_vinho", label: "Taça de Vinho", icon: "🍷" },
+    { id: "luz_penumbra", label: "Luz Penumbra / Sombras", icon: "🕯️" },
+    { id: "camisa_aberta", label: "Camisa Social Aberta", icon: "👔" },
+  ],
+  evento: [
+    { id: "natal", label: "Natal / Luzes / Pinheiro", icon: "🎄" },
+    { id: "halloween", label: "Halloween / Fantasia", icon: "🎃" },
+    { id: "reveillon", label: "Ano Novo / Branco e Dourado", icon: "🎆" },
+    { id: "carnaval", label: "Carnaval / Brilho / Fantasia", icon: "🎭" },
+    { id: "dia_das_maes", label: "Dia das Mães / Família", icon: "💐" },
+  ],
+  religioso: [
+    { id: "crucifixo", label: "Crucifixo / Terço", icon: "✝️" },
+    { id: "biblia", label: "Bíblia / Livro Sagrado", icon: "📖" },
+    { id: "vestes_brancas", label: "Vestes Brancas / Batizado", icon: "🕊️" },
+    { id: "velas_espirituais", label: "Velas Espirituais", icon: "🕯️" },
+    { id: "comunhao", label: "Primeira Comunhão", icon: "🍞" },
+  ],
+  outro: [
+    { id: "carro_moto", label: "Carro / Moto", icon: "🚗" },
+    { id: "luzes_neon", label: "Luzes / Neon", icon: "💡" },
+    { id: "instrumento_musical", label: "Instrumento Musical", icon: "🎸" },
+    { id: "pet_animal", label: "Pet / Animal de Estimação", icon: "🐾" },
+    { id: "natureza_livre", label: "Ao Ar Livre / Paisagem", icon: "🌿" },
+  ],
+};
+
 export type CategoryQuestion =
   | { key: string; label: string; type: "choice"; options: string[] }
   | { key: string; label: string; type: "text"; placeholder?: string }
@@ -102,14 +192,14 @@ export const CATEGORY_QUESTIONS: Record<string, CategoryQuestion[]> = {
       key: "idade",
       label: "Qual idade você vai completar?",
       type: "number",
-      placeholder: "Ex: 27",
+      placeholder: "Ex: 30",
     },
-    { key: "mostrar_idade", label: "Pode mostrar a idade na foto?", type: "boolean" },
+    { key: "mostrar_idade", label: "Pode mostrar a idade/balões na foto?", type: "boolean" },
     {
       key: "pessoas",
       label: "Quantas pessoas aparecem nas fotos?",
       type: "number",
-      placeholder: "Ex: 2",
+      placeholder: "Ex: 1",
     },
   ],
   estudio: [
@@ -121,9 +211,9 @@ export const CATEGORY_QUESTIONS: Record<string, CategoryQuestion[]> = {
     },
     {
       key: "estilo",
-      label: "Qual estilo combina mais com você?",
+      label: "Qual clima combina mais com você?",
       type: "choice",
-      options: ["Editorial", "Clássico", "Moderno"],
+      options: ["Elegante & Sofisticado", "Moderno & Minimalista", "Casual Chic"],
     },
   ],
   casal: [
@@ -146,14 +236,14 @@ export const CATEGORY_QUESTIONS: Record<string, CategoryQuestion[]> = {
       key: "traje",
       label: "Que tipo de traje?",
       type: "choice",
-      options: ["Civil", "Gala", "Praia"],
+      options: ["Civil / Casual", "Gala / Tradicional", "Praia / Pé na areia"],
     },
     { key: "veu_buque", label: "Véu e buquê aparecem?", type: "boolean" },
     {
       key: "ambiente",
       label: "Ambiente interno ou externo?",
       type: "choice",
-      options: ["Interno", "Externo"],
+      options: ["Interno / Salão / Altar", "Externo / Praia / Campo"],
     },
   ],
   evento: [
@@ -161,13 +251,13 @@ export const CATEGORY_QUESTIONS: Record<string, CategoryQuestion[]> = {
       key: "ocasiao",
       label: "Qual é a data ou ocasião?",
       type: "text",
-      placeholder: "Ex: Natal, Halloween, Dia das Mães",
+      placeholder: "Ex: Natal, Halloween, Dia das Mães, Ano Novo",
     },
     {
       key: "elementos",
       label: "Algum elemento típico precisa aparecer?",
       type: "text",
-      placeholder: "Ex: árvore de Natal, abóboras",
+      placeholder: "Ex: árvore de Natal, luzes, abóboras",
     },
   ],
   gestante: [
@@ -175,14 +265,14 @@ export const CATEGORY_QUESTIONS: Record<string, CategoryQuestion[]> = {
       key: "semanas",
       label: "De quantas semanas você está?",
       type: "number",
-      placeholder: "Ex: 32",
+      placeholder: "Ex: 30",
     },
     { key: "barriga", label: "A barriga aparece à mostra?", type: "boolean" },
     {
       key: "acompanhado",
       label: "Alguém aparece com você?",
       type: "text",
-      placeholder: "Ex: meu marido, minha filha",
+      placeholder: "Ex: meu marido, meu filho mais velho",
     },
   ],
   corporativo: [
@@ -190,13 +280,13 @@ export const CATEGORY_QUESTIONS: Record<string, CategoryQuestion[]> = {
       key: "uso",
       label: "Onde essas fotos vão ser usadas?",
       type: "choice",
-      options: ["LinkedIn / perfil", "Site da empresa", "Material de divulgação", "Todos"],
+      options: ["LinkedIn / Perfil profissional", "Site da empresa / Portfólio", "Material de divulgação / Palestras", "Todos"],
     },
     {
       key: "formalidade",
       label: "Quão formal deve ser?",
       type: "choice",
-      options: ["Bem formal", "Elegante mas leve", "Descontraído"],
+      options: ["Bem formal (Terno / Blazer)", "Elegante mas leve", "Descontraído (Casual chic)"],
     },
   ],
   religioso: [
@@ -204,13 +294,13 @@ export const CATEGORY_QUESTIONS: Record<string, CategoryQuestion[]> = {
       key: "ocasiao",
       label: "Qual é a ocasião?",
       type: "text",
-      placeholder: "Ex: batizado, primeira comunhão",
+      placeholder: "Ex: batizado, primeira comunhão, celebração",
     },
     {
       key: "simbolos",
       label: "Algum símbolo precisa aparecer?",
       type: "text",
-      placeholder: "Ex: terço, bíblia, véu",
+      placeholder: "Ex: terço, bíblia, vela, vestes brancas",
     },
   ],
   sensual: [
@@ -218,13 +308,13 @@ export const CATEGORY_QUESTIONS: Record<string, CategoryQuestion[]> = {
       key: "intensidade",
       label: "Quanto de ousadia você quer?",
       type: "choice",
-      options: ["Bem discreto", "Sugestivo", "Mais ousado"],
+      options: ["Bem discreto & Elegante", "Sugestivo & Sensual", "Mais ousado / Intimista"],
     },
     {
       key: "ambiente",
       label: "Onde você imagina as fotos?",
       type: "choice",
-      options: ["Quarto", "Estúdio", "Ao ar livre"],
+      options: ["Quarto / Cama", "Estúdio", "Ao ar livre / Banho"],
     },
   ],
   outro: [
@@ -232,7 +322,7 @@ export const CATEGORY_QUESTIONS: Record<string, CategoryQuestion[]> = {
       key: "descricao",
       label: "Descreva o ensaio que você imagina",
       type: "text",
-      placeholder: "Conte com suas palavras",
+      placeholder: "Conte com suas palavras o estilo e tema",
     },
   ],
 };

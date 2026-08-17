@@ -6,9 +6,18 @@ import {
   SESSION_TYPES,
   labelFor,
 } from "./ensaio-options";
-import type { CatalogItemPublic, OrderConfigData } from "./ensaio-types";
+import type { CatalogItemPublic, CustomReference, OrderConfigData } from "./ensaio-types";
 
 export type SummarySection = { title: string; body: string };
+
+export type ReferenceViewItem = {
+  id: string;
+  imageUrl: string | null;
+  style?: string | null;
+  vibe?: string | null;
+  peopleCount?: number | null;
+  isCustom?: boolean;
+};
 
 export function sessionTypeLabel(config: OrderConfigData) {
   const base =
@@ -28,23 +37,32 @@ export function buildSummarySections(params: {
 
   const chosenRefIds = selections["referencia"] ?? Object.values(selections).flat();
   const chosenRefs = catalog.filter((c) => chosenRefIds.includes(c.id));
+  const customRefs =
+    config.custom_references ??
+    (config.category_answers?.["_custom_references"] as CustomReference[] | undefined) ??
+    [];
+  const totalRefsCount = chosenRefs.length + customRefs.length;
 
   let hairDescription = "Não informado";
   if (config.hair === "manter") {
     hairDescription = "Manter como está nas fotos de identidade que o cliente enviará";
   } else if (config.hair) {
     const hairIdx = chosenRefIds.indexOf(config.hair);
-    hairDescription =
-      hairIdx >= 0
-        ? `Inspirar-se no cabelo da Foto de Referência #${hairIdx + 1}`
-        : "Inspirar-se em foto de referência selecionada";
+    const customIdx = customRefs.findIndex((r) => r.id === config.hair);
+    if (hairIdx >= 0) {
+      hairDescription = `Inspirar-se no cabelo da Foto de Catálogo #${hairIdx + 1}`;
+    } else if (customIdx >= 0) {
+      hairDescription = `Inspirar-se no cabelo da Foto Própria do Cliente #${customIdx + 1}`;
+    } else {
+      hairDescription = "Inspirar-se em foto de referência selecionada";
+    }
   }
 
   const header = [
     `PEDIDO #${orderNumber} — ${clientName}`,
     `Tipo de ensaio: ${sessionTypeLabel(config)}`,
     `Quantidade de fotos do pacote: ${photoCount}`,
-    `Fotos de referência escolhidas: ${chosenRefs.length} de ${photoCount}`,
+    `Fotos de referência escolhidas: ${totalRefsCount} de ${photoCount}${customRefs.length > 0 ? ` (${customRefs.length} enviadas pelo cliente)` : ""}`,
     `Maquiagem: ${labelFor(MAKEUP_OPTIONS, config.makeup) || "Não informado"}`,
     `Enquadramento: ${labelFor(FRAMING_OPTIONS, config.framing) || "Não informado"}`,
     `Roupa: ${labelFor(OUTFIT_MODES, config.outfit_mode) || "Não informado"}`,
@@ -107,7 +125,28 @@ export function summaryToText(sections: SummarySection[]) {
 export function referenceImages(
   catalog: CatalogItemPublic[],
   selections: Record<string, string[]>,
-) {
+  customReferences?: CustomReference[],
+): ReferenceViewItem[] {
   const ids = selections["referencia"] ?? Object.values(selections).flat();
-  return catalog.filter((c) => ids.includes(c.id));
+  const catalogRefs: ReferenceViewItem[] = catalog
+    .filter((c) => ids.includes(c.id))
+    .map((c) => ({
+      id: c.id,
+      imageUrl: c.imageUrl,
+      style: c.style,
+      vibe: c.vibe,
+      peopleCount: c.peopleCount,
+      isCustom: false,
+    }));
+
+  const customRefs: ReferenceViewItem[] = (customReferences ?? []).map((cr) => ({
+    id: cr.id,
+    imageUrl: cr.imageUrl,
+    style: "Referência do cliente",
+    vibe: "Foto própria anexada",
+    peopleCount: 1,
+    isCustom: true,
+  }));
+
+  return [...catalogRefs, ...customRefs];
 }

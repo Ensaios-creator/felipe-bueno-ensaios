@@ -37,6 +37,16 @@ interface CatalogRaw {
   gender: string | null;
   ambiance: string | null;
   vibe: string | null;
+  has_cake: boolean | null;
+  has_age_number: boolean | null;
+  tags: string[] | null;
+}
+
+export function getPublicCatalogImageUrl(path: string | null): string | null {
+  if (!path) return null;
+  if (path.startsWith("http://") || path.startsWith("https://")) return path;
+  const { data } = publicSupabase.storage.from("catalog").getPublicUrl(path);
+  return data.publicUrl;
 }
 
 export async function fetchPublicOrder(token: string): Promise<PublicOrderPayload> {
@@ -78,32 +88,13 @@ export async function fetchPublicOrder(token: string): Promise<PublicOrderPayloa
     (publicSupabase
       .from("catalog_items")
       .select(
-        "id, image_url, style, position, session_types, people_count, gender, ambiance, vibe",
+        "id, image_url, style, position, session_types, people_count, gender, ambiance, vibe, has_cake, has_age_number, tags",
       )
       .eq("active", true)
       .order("position") as unknown) as Promise<{ data: CatalogRaw[] | null }>,
   ]);
 
-  const catalog = ((await rawCatalogResult).data ?? []);
-
-  const storagePaths = Array.from(
-    new Set(
-      catalog
-        .map((c) => c.image_url)
-        .filter((p): p is string => Boolean(p) && !p!.startsWith("http")),
-    ),
-  );
-
-  const urlMap: Record<string, string> = {};
-  if (storagePaths.length > 0) {
-    const { data: signed } = await publicSupabase.storage
-      .from("catalog")
-      .createSignedUrls(storagePaths, 60 * 60 * 6);
-    (signed ?? []).forEach((entry, index) => {
-      const original = storagePaths[index];
-      if (original && entry.signedUrl) urlMap[original] = entry.signedUrl;
-    });
-  }
+  const catalog = (await rawCatalogResult).data ?? [];
 
   const selections: Record<string, string[]> = {};
   for (const item of (items ?? []).sort((a, b) => a.position - b.position)) {
@@ -133,23 +124,63 @@ export async function fetchPublicOrder(token: string): Promise<PublicOrderPayloa
       special_notes: config?.special_notes ?? "",
       category_answers:
         (config?.category_answers as Record<string, string | number | boolean | null>) ?? {},
+      custom_references:
+        ((config?.category_answers as Record<string, unknown>)?.[
+          "_custom_references"
+        ] as OrderConfigData["custom_references"]) ?? [],
       current_step: config?.current_step ?? 0,
       confirmed: config?.confirmed ?? false,
     },
     selections,
     catalog: catalog.map((c) => ({
       id: c.id,
-      imageUrl: c.image_url?.startsWith("http")
-        ? c.image_url
-        : (urlMap[c.image_url ?? ""] ?? null),
+      imageUrl: getPublicCatalogImageUrl(c.image_url),
       sessionTypes: (c.session_types ?? []) as string[],
       peopleCount: c.people_count ?? null,
       gender: c.gender ?? null,
       ambiance: c.ambiance ?? null,
       style: c.style ?? null,
       vibe: c.vibe ?? null,
+      hasCake: Boolean(c.has_cake),
+      hasAgeNumber: Boolean(c.has_age_number),
+      tags: (c.tags ?? []) as string[],
       position: c.position ?? 0,
     })) satisfies CatalogItemPublic[],
+  };
+}
+
+export async function uploadClientReferencePhoto({
+  token,
+  file,
+}: {
+  token: string;
+  file: File;
+}) {
+  const cleanToken = assertToken(token);
+  const { data: order, error: orderErr } = await publicSupabase
+    .from("orders")
+    .select("id")
+    .eq("public_token", cleanToken)
+    .single();
+
+  if (orderErr || !order) throw new Error("Pedido não encontrado.");
+
+  const ext = file.name.split(".").pop() || "jpg";
+  const refId = `custom-${crypto.randomUUID()}`;
+  const path = `clientes/${order.id}/${refId}.${ext}`;
+
+  const { error: uploadError } = await publicSupabase.storage
+    .from("catalog")
+    .upload(path, file, { cacheControl: "3600", upsert: false });
+
+  if (uploadError) throw uploadError;
+
+  const imageUrl = getPublicCatalogImageUrl(path)!;
+  return {
+    id: refId,
+    imageUrl,
+    name: file.name,
+    createdAt: new Date().toISOString(),
   };
 }
 
@@ -190,6 +221,25 @@ export async function savePublicOrderClient(params: {
       if (key in params.config) {
         patch[key] = params.config[key];
       }
+    }
+
+    // Se houver custom_references, salva dentro de category_answers._custom_references
+    if (params.config.custom_references !== undefined) {
+      const { data: currentConfig } = await publicSupabase
+        .from("order_configs")
+        .select("category_answers")
+        .eq("order_id", order.id)
+        .maybeSingle();
+
+      const existingAnswers =
+        (currentConfig?.category_answers as Record<string, unknown>) ?? {};
+      const newAnswers =
+        (patch["category_answers"] as Record<string, unknown>) ?? existingAnswers;
+
+      patch["category_answers"] = {
+        ...newAnswers,
+        _custom_references: params.config.custom_references,
+      };
     }
 
     const { error: patchError } = await publicSupabase

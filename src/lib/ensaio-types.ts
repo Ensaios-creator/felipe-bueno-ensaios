@@ -7,7 +7,17 @@ export type CatalogItemPublic = {
   ambiance: string | null;
   style: string | null;
   vibe: string | null;
+  hasCake?: boolean;
+  hasAgeNumber?: boolean;
+  tags?: string[];
   position: number;
+};
+
+export type CustomReference = {
+  id: string;
+  imageUrl: string;
+  name?: string;
+  createdAt?: string;
 };
 
 export type OrderConfigData = {
@@ -23,6 +33,7 @@ export type OrderConfigData = {
   visible_text_answer: string;
   special_notes: string;
   category_answers: Record<string, string | number | boolean | null>;
+  custom_references?: CustomReference[];
   current_step: number;
   confirmed: boolean;
 };

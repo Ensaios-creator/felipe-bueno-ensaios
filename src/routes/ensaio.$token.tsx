@@ -9,8 +9,11 @@ import {
   ImageIcon,
   Maximize2,
   MessageCircle,
+  Plus,
   RefreshCw,
   Sparkles,
+  Trash2,
+  UploadCloud,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -31,11 +34,16 @@ import {
   OUTFIT_MODES,
   SESSION_TYPES,
 } from "@/lib/ensaio-options";
-import type { CatalogItemPublic, OrderConfigData } from "@/lib/ensaio-types";
+import type {
+  CatalogItemPublic,
+  CustomReference,
+  OrderConfigData,
+} from "@/lib/ensaio-types";
 import {
   confirmPublicOrderClient,
   fetchPublicOrder,
   savePublicOrderClient,
+  uploadClientReferencePhoto,
 } from "@/lib/public-order-service";
 import { cn } from "@/lib/utils";
 import { clientSendPhotosMessage, getActiveStudioWhatsApp, whatsappLink } from "@/lib/whatsapp";
@@ -87,6 +95,7 @@ function EnsaioPage() {
   const [draft, setDraft] = useState<OrderConfigData | null>(null);
   const [selections, setSelections] = useState<Record<string, string[]> | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [galleryLimit, setGalleryLimit] = useState(30);
 
   const config = draft ?? query.data?.config ?? null;
   const picked = selections ?? query.data?.selections ?? {};
@@ -149,16 +158,21 @@ function EnsaioPage() {
     }
   }, [hasRestoredStep, query.data?.config?.current_step, steps.length]);
 
-  // Auto-avança da galeria quando o cliente preenche todas as fotos
+  const [uploadingCustom, setUploadingCustom] = useState(false);
+
+  // Auto-avança da galeria quando o cliente preenche todas as fotos (catálogo + próprias)
   const currentStep = steps[stepIndex] ?? "boas-vindas";
   const currentChosenRefIds = (selections ?? query.data?.selections ?? {})["referencia"] ?? [];
+  const currentCustomRefs = config?.custom_references ?? [];
+  const totalChosenCount = currentChosenRefIds.length + currentCustomRefs.length;
   const orderPhotoCount = query.data?.order?.photoCount ?? 0;
   const [galleryAutoAdvanced, setGalleryAutoAdvanced] = useState(false);
+
   useEffect(() => {
     if (
       currentStep === "galeria" &&
       orderPhotoCount > 0 &&
-      currentChosenRefIds.length >= orderPhotoCount &&
+      totalChosenCount >= orderPhotoCount &&
       !galleryAutoAdvanced
     ) {
       setGalleryAutoAdvanced(true);
@@ -174,7 +188,40 @@ function EnsaioPage() {
     if (currentStep !== "galeria") {
       setGalleryAutoAdvanced(false);
     }
-  }, [currentStep, currentChosenRefIds.length, orderPhotoCount, galleryAutoAdvanced, steps.length]);
+  }, [currentStep, totalChosenCount, orderPhotoCount, galleryAutoAdvanced, steps.length]);
+
+  // Suporte a colar foto própria do clipboard (Ctrl+V) na etapa de galeria
+  useEffect(() => {
+    if (currentStep !== "galeria") return;
+
+    function handleClientPaste(e: ClipboardEvent) {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item && item.type.startsWith("image/")) {
+          const file = item.getAsFile();
+          if (file) {
+            e.preventDefault();
+            const fakeList = {
+              0: file,
+              length: 1,
+              item: (idx: number) => (idx === 0 ? file : null),
+              [Symbol.iterator]: function* () {
+                yield file;
+              },
+            } as unknown as FileList;
+            handleUploadCustomReference(fakeList);
+            break;
+          }
+        }
+      }
+    }
+
+    window.addEventListener("paste", handleClientPaste);
+    return () => window.removeEventListener("paste", handleClientPaste);
+  }, [currentStep, totalChosenCount, orderPhotoCount, config?.custom_references]);
 
   if (query.isLoading) {
     return (
@@ -248,7 +295,8 @@ function EnsaioPage() {
       if (current.includes(id)) {
         next = current.filter((v) => v !== id);
       } else {
-        if (current.length >= order.photoCount) {
+        const total = current.length + (config?.custom_references ?? []).length;
+        if (total >= order.photoCount) {
           toast.info(
             `Você já escolheu ${order.photoCount} ${order.photoCount === 1 ? "foto" : "fotos"}. Toque em uma foto para trocar.`,
           );
@@ -262,40 +310,175 @@ function EnsaioPage() {
     });
   }
 
-  /** Filtra as imagens de referência com base nas respostas do cliente. */
+  async function handleUploadCustomReference(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    const currentTotal =
+      (picked["referencia"] ?? []).length + (config?.custom_references ?? []).length;
+    if (currentTotal >= order.photoCount) {
+      toast.info(`Você já escolheu o limite de ${order.photoCount} fotos do seu pacote.`);
+      return;
+    }
+
+    setUploadingCustom(true);
+    try {
+      const newCustoms: CustomReference[] = [];
+      const remainingSlots = order.photoCount - currentTotal;
+      const filesToUpload = Array.from(files).slice(0, remainingSlots);
+
+      for (const file of filesToUpload) {
+        const uploaded = await uploadClientReferencePhoto({ token, file });
+        newCustoms.push(uploaded);
+      }
+
+      const updated = [...(config?.custom_references ?? []), ...newCustoms];
+      patchConfig({ custom_references: updated });
+      toast.success(
+        `✓ ${newCustoms.length === 1 ? "Sua foto de referência foi adicionada!" : `${newCustoms.length} fotos foram adicionadas!`}`,
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro ao enviar foto.");
+    } finally {
+      setUploadingCustom(false);
+    }
+  }
+
+  function removeCustomReference(id: string) {
+    const next = (config?.custom_references ?? []).filter((r) => r.id !== id);
+    patchConfig({ custom_references: next });
+    toast.info("Referência removida.");
+  }
+
+  /** Filtra e ordena as imagens de referência com base nas respostas do cliente. */
   function getFilteredImages(): CatalogItemPublic[] {
     const sessionType = config?.session_type ?? null;
-    const peopleAnswer = config?.category_answers?.["pessoas"];
-    const peopleCount = typeof peopleAnswer === "number" ? peopleAnswer : null;
+    const sessionSubtype = config?.session_subtype ?? null;
+    const categoryAnswers = config?.category_answers ?? {};
 
-    let result = [...catalog];
+    // 1. Determina quantidade de pessoas esperada
+    let targetPeopleCount: number | null = null;
+    if (typeof categoryAnswers["pessoas"] === "number") {
+      targetPeopleCount = categoryAnswers["pessoas"];
+    } else if (sessionSubtype === "Meu aniversário" || sessionSubtype === "Aniversário infantil") {
+      targetPeopleCount = 1;
+    } else if (sessionSubtype === "Aniversário casal" || sessionType === "casal") {
+      targetPeopleCount = 2;
+    } else if (sessionSubtype === "Aniversário empresarial") {
+      targetPeopleCount = 3;
+    }
 
-    // Filtro por tipo de ensaio (relaxa se restar < 2 imagens)
+    // 2. Preferências de ambiente e elementos
+    const fundoAnswer = categoryAnswers["fundo"];
+    const ambienteAnswer = categoryAnswers["ambiente"];
+    const showAgeAnswer = categoryAnswers["mostrar_idade"];
+
+    // 3. Filtro preliminar por tipo de ensaio
+    let candidates = [...catalog];
     if (sessionType) {
-      const byType = result.filter(
+      const matchType = candidates.filter(
         (img) => img.sessionTypes.length === 0 || img.sessionTypes.includes(sessionType),
       );
-      if (byType.length >= 2) result = byType;
+      if (matchType.length >= 2) {
+        candidates = matchType;
+      }
     }
 
-    // Filtro por número de pessoas (relaxa se restar < 2 imagens)
-    if (peopleCount !== null) {
-      const byPeople = result.filter((img) => {
-        if (img.peopleCount === null) return true;
-        if (peopleCount >= 3) return (img.peopleCount ?? 1) >= 3;
-        return img.peopleCount === peopleCount;
-      });
-      if (byPeople.length >= 2) result = byPeople;
+    // 4. Sistema de Pontuação de Relevância
+    const scored = candidates.map((img) => {
+      let score = 10;
+
+      // Correspondência estrita de tipo de ensaio
+      if (sessionType && img.sessionTypes.includes(sessionType)) {
+        score += 30;
+      }
+
+      // Correspondência de número de pessoas
+      if (targetPeopleCount !== null && img.peopleCount !== null) {
+        if (targetPeopleCount >= 3 && img.peopleCount >= 3) {
+          score += 25;
+        } else if (img.peopleCount === targetPeopleCount) {
+          score += 25;
+        } else {
+          score -= 15;
+        }
+      }
+
+      // Elementos de Aniversário (Idade / Balões / Velas)
+      if (sessionType === "aniversario") {
+        if (showAgeAnswer === true && img.hasAgeNumber) {
+          score += 20;
+        }
+        if (sessionSubtype === "Aniversário infantil" && img.tags?.includes("infantil")) {
+          score += 25;
+        }
+      }
+
+      // Preferência de Fundo/Ambiente
+      if (fundoAnswer === "Fundo liso" && img.ambiance === "estudio") {
+        score += 15;
+      } else if (
+        fundoAnswer === "Cenário elaborado" &&
+        (img.ambiance === "decorado" || img.ambiance === "interno")
+      ) {
+        score += 15;
+      }
+
+      if (ambienteAnswer === "Interno" && (img.ambiance === "interno" || img.ambiance === "estudio")) {
+        score += 15;
+      } else if (
+        ambienteAnswer === "Externo" &&
+        (img.ambiance === "externo" || img.ambiance === "natureza")
+      ) {
+        score += 15;
+      }
+
+      return { img, score };
+    });
+
+    // Ordena pelo maior score e depois pela posição definida no estúdio
+    scored.sort((a, b) => b.score - a.score || a.img.position - b.img.position);
+
+    // Se tivermos filtro de pessoas bem definido e candidatos suficientes, filtra
+    if (targetPeopleCount !== null) {
+      const exactPeople = scored
+        .filter((s) => {
+          if (s.img.peopleCount === null) return true;
+          if (targetPeopleCount! >= 3) return s.img.peopleCount >= 3;
+          return s.img.peopleCount === targetPeopleCount;
+        })
+        .map((s) => s.img);
+
+      if (exactPeople.length >= 3) {
+        return exactPeople;
+      }
     }
 
-    return result;
+    return scored.map((s) => s.img);
   }
 
   // ─── Estado derivado ─────────────────────────────────────────────────────────
 
   const filteredImages = getFilteredImages();
   const chosenRefIds = picked["referencia"] ?? [];
-  const chosenRefs = catalog.filter((img) => chosenRefIds.includes(img.id));
+  const chosenCatalogRefs = catalog.filter((img) => chosenRefIds.includes(img.id));
+  const customRefs = config?.custom_references ?? [];
+
+  // Lista unificada de referências (catálogo + enviadas pelo cliente)
+  const allChosenRefs = [
+    ...chosenCatalogRefs.map((img) => ({
+      id: img.id,
+      imageUrl: img.imageUrl,
+      isCustom: false,
+      name: undefined as string | undefined,
+    })),
+    ...customRefs.map((c) => ({
+      id: c.id,
+      imageUrl: c.imageUrl,
+      isCustom: true,
+      name: c.name,
+    })),
+  ];
+
+  const totalSelectedCount = chosenRefIds.length + customRefs.length;
 
   const stepValid = (() => {
     switch (step) {
@@ -304,7 +487,7 @@ function EnsaioPage() {
       case "maquiagem":
         return Boolean(config.makeup);
       case "galeria":
-        return chosenRefIds.length > 0;
+        return totalSelectedCount > 0;
       case "enquadramento":
         return Boolean(config.framing);
       case "roupa":
@@ -592,26 +775,26 @@ function EnsaioPage() {
           <StepShell
             eyebrow="Passo 4"
             title="Escolha as fotos que você mais amar"
-            hint={`Toque para escolher até ${order.photoCount} ${order.photoCount === 1 ? "foto" : "fotos de referência"}.`}
+            hint={`Selecione ou envie até ${order.photoCount} ${order.photoCount === 1 ? "foto de referência" : "fotos de referência"} para o seu ensaio.`}
           >
             {/* Card de Progresso da Seleção */}
             <div className="mb-6 rounded-xl border border-border/80 bg-card/80 p-4 shadow-sm">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="flex size-7 items-center justify-center rounded-full bg-foreground text-xs font-medium text-background">
-                    {chosenRefIds.length}
+                    {totalSelectedCount}
                   </span>
                   <p className="text-sm font-medium text-foreground">
                     de {order.photoCount} {order.photoCount === 1 ? "foto selecionada" : "fotos selecionadas"}
                   </p>
                 </div>
                 <p className="font-display text-base font-light text-muted-foreground">
-                  {chosenRefIds.length >= order.photoCount ? (
+                  {totalSelectedCount >= order.photoCount ? (
                     <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
                       <CheckCircle2 className="size-4" /> Pacote Completo
                     </span>
                   ) : (
-                    `Faltam ${order.photoCount - chosenRefIds.length}`
+                    `Faltam ${order.photoCount - totalSelectedCount}`
                   )}
                 </p>
               </div>
@@ -620,12 +803,99 @@ function EnsaioPage() {
                 <div
                   className="h-full bg-foreground transition-all duration-500 ease-out rounded-full"
                   style={{
-                    width: `${Math.min(100, Math.round((chosenRefIds.length / Math.max(1, order.photoCount)) * 100))}%`,
+                    width: `${Math.min(100, Math.round((totalSelectedCount / Math.max(1, order.photoCount)) * 100))}%`,
                   }}
                 />
               </div>
             </div>
 
+            {/* ── Card de Upload de Foto Própria do Cliente ─────────────────── */}
+            <div className="mb-6 rounded-xl border-2 border-dashed border-border/90 bg-card/60 p-4 transition-all hover:border-foreground/40 hover:bg-card">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-3 text-left">
+                  <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                    <UploadCloud className="size-6" />
+                  </div>
+                  <div>
+                    <p className="font-display text-base sm:text-lg font-light text-foreground">
+                      Tem uma foto de referência própria?
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Envie do celular/computador para mesclar com o catálogo do estúdio.
+                    </p>
+                  </div>
+                </div>
+
+                <label className="w-full sm:w-auto shrink-0 flex items-center justify-center gap-2 rounded-xl bg-secondary px-4 py-2.5 text-xs font-semibold text-foreground border border-border cursor-pointer hover:bg-secondary/80 transition-colors">
+                  <UploadCloud className="size-4" />
+                  <span>{uploadingCustom ? "Enviando..." : "Anexar minha foto"}</span>
+                  <input
+                    type="file"
+                    multiple
+                    accept="image/*"
+                    disabled={uploadingCustom}
+                    onChange={(e) => handleUploadCustomReference(e.target.files)}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+            </div>
+
+            {/* ── Fotos Enviadas pelo Próprio Cliente ──────────────────────── */}
+            {customRefs.length > 0 && (
+              <div className="mb-6 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Suas Fotos Enviadas ({customRefs.length})
+                  </p>
+                  <span className="text-[0.7rem] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
+                    <Check className="size-3" /> Incluídas no pacote
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3">
+                  {customRefs.map((customImg, idx) => (
+                    <div
+                      key={customImg.id}
+                      className="group relative aspect-[3/4] overflow-hidden rounded-xl border-2 border-foreground ring-2 ring-foreground/80 ring-offset-2 ring-offset-background shadow-editorial bg-card"
+                    >
+                      <img
+                        src={customImg.imageUrl}
+                        alt="Sua referência"
+                        className="size-full object-cover"
+                      />
+
+                      {/* Selo de Referência Própria */}
+                      <div className="absolute left-2 top-2 rounded-md bg-amber-500 px-2 py-0.5 text-[0.65rem] font-bold text-white shadow-md">
+                        ✨ Sua Foto #{idx + 1}
+                      </div>
+
+                      {/* Botão de Zoom */}
+                      <button
+                        type="button"
+                        onClick={() => setPreviewImage(customImg.imageUrl)}
+                        className="absolute left-2 bottom-2 flex size-7 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/80"
+                        title="Ver em tamanho real"
+                      >
+                        <Maximize2 className="size-3.5" />
+                      </button>
+
+                      {/* Botão de Excluir Referência Própria */}
+                      <button
+                        type="button"
+                        onClick={() => removeCustomReference(customImg.id)}
+                        className="absolute right-2 top-2 flex size-7 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-md transition-transform hover:scale-110"
+                        title="Remover foto"
+                      >
+                        <Trash2 className="size-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ── Galeria de Referências do Catálogo ──────────────────────── */}
             {filteredImages.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border p-12 text-center">
                 <ImageIcon className="mx-auto mb-4 size-8 text-muted-foreground" />
@@ -633,84 +903,100 @@ function EnsaioPage() {
                   Nenhuma referência disponível no momento
                 </p>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Você pode avançar e nos contar em observações o estilo que imagina.
+                  Você pode avançar ou anexar suas próprias fotos acima.
                 </p>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3">
-                {filteredImages.map((img) => {
-                  const isSelected = chosenRefIds.includes(img.id);
-                  const selectionOrder = chosenRefIds.indexOf(img.id) + 1;
+              <>
+                <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3">
+                  {filteredImages.slice(0, galleryLimit).map((img) => {
+                    const isSelected = chosenRefIds.includes(img.id);
+                    const selectionOrder = chosenRefIds.indexOf(img.id) + 1;
 
-                  return (
-                    <div
-                      key={img.id}
-                      className={cn(
-                        "group relative overflow-hidden rounded-xl aspect-[3/4] border transition-all duration-300 select-none",
-                        isSelected
-                          ? "border-foreground ring-2 ring-foreground/90 ring-offset-2 ring-offset-background scale-[1.02] shadow-editorial"
-                          : "border-border/80 bg-card/60 opacity-85 hover:opacity-100 hover:border-foreground/40 hover:shadow-sm",
-                      )}
-                    >
-                      {/* Clique principal na foto para alternar seleção */}
-                      <button
-                        type="button"
-                        onClick={() => toggleRef(img.id)}
-                        className="size-full text-left"
-                      >
-                        {img.imageUrl ? (
-                          <img
-                            src={img.imageUrl}
-                            alt=""
-                            loading="lazy"
-                            className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
-                          />
-                        ) : (
-                          <div className="flex size-full items-center justify-center bg-muted">
-                            <ImageIcon className="size-8 text-muted-foreground" />
-                          </div>
+                    return (
+                      <div
+                        key={img.id}
+                        className={cn(
+                          "group relative overflow-hidden rounded-xl aspect-[3/4] border transition-all duration-300 select-none",
+                          isSelected
+                            ? "border-foreground ring-2 ring-foreground/90 ring-offset-2 ring-offset-background scale-[1.02] shadow-editorial"
+                            : "border-border/80 bg-card/60 opacity-85 hover:opacity-100 hover:border-foreground/40 hover:shadow-sm",
                         )}
-                      </button>
-
-                      {/* Botão de Zoom / Ver em tamanho real */}
-                      {img.imageUrl ? (
+                      >
+                        {/* Clique principal na foto para alternar seleção */}
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setPreviewImage(img.imageUrl);
-                          }}
-                          className="absolute left-2 top-2 flex size-7 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/80"
-                          title="Ver foto em tamanho real"
+                          onClick={() => toggleRef(img.id)}
+                          className="size-full text-left"
                         >
-                          <Maximize2 className="size-3.5" />
+                          {img.imageUrl ? (
+                            <img
+                              src={img.imageUrl}
+                              alt=""
+                              loading="lazy"
+                              className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
+                            />
+                          ) : (
+                            <div className="flex size-full items-center justify-center bg-muted">
+                              <ImageIcon className="size-8 text-muted-foreground" />
+                            </div>
+                          )}
                         </button>
-                      ) : null}
 
-                      {/* Badge de Seleção com Número */}
-                      <button
-                        type="button"
-                        onClick={() => toggleRef(img.id)}
-                        className="absolute right-2 top-2"
-                      >
-                        {isSelected ? (
-                          <span className="flex size-7 items-center justify-center rounded-full bg-foreground text-xs font-semibold text-background shadow-md animate-in zoom-in-75 duration-200">
-                            {selectionOrder}
-                          </span>
-                        ) : (
-                          <span className="flex size-7 items-center justify-center rounded-full border border-white/70 bg-black/30 text-transparent opacity-0 transition-opacity group-hover:opacity-100">
-                            <Check className="size-3 text-white" />
-                          </span>
-                        )}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
+                        {/* Botão de Zoom / Ver em tamanho real */}
+                        {img.imageUrl ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPreviewImage(img.imageUrl);
+                            }}
+                            className="absolute left-2 top-2 flex size-7 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/80"
+                            title="Ver foto em tamanho real"
+                          >
+                            <Maximize2 className="size-3.5" />
+                          </button>
+                        ) : null}
+
+                        {/* Badge de Seleção com Número */}
+                        <button
+                          type="button"
+                          onClick={() => toggleRef(img.id)}
+                          className="absolute right-2 top-2"
+                        >
+                          {isSelected ? (
+                            <span className="flex size-7 items-center justify-center rounded-full bg-foreground text-xs font-semibold text-background shadow-md animate-in zoom-in-75 duration-200">
+                              {selectionOrder}
+                            </span>
+                          ) : (
+                            <span className="flex size-7 items-center justify-center rounded-full border border-white/70 bg-black/30 text-transparent opacity-0 transition-opacity group-hover:opacity-100">
+                              <Check className="size-3 text-white" />
+                            </span>
+                          )}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {filteredImages.length > galleryLimit && (
+                  <div className="mt-6 text-center">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setGalleryLimit((prev) => prev + 30)}
+                      className="gap-2 border-border/80 text-xs"
+                    >
+                      <Plus className="size-3.5" />
+                      Ver mais opções (+{filteredImages.length - galleryLimit} fotos)
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
 
             {/* Auto-avança quando todas as fotos são selecionadas */}
-            {chosenRefIds.length >= order.photoCount && chosenRefIds.length > 0 ? (
+            {totalSelectedCount >= order.photoCount && totalSelectedCount > 0 ? (
               <div className="mt-6 flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/8 p-4 animate-in fade-in-50 duration-300">
                 <CheckCircle2 className="size-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
                 <p className="text-sm text-emerald-800 dark:text-emerald-300 font-medium">
@@ -720,7 +1006,7 @@ function EnsaioPage() {
             ) : (
               <StudioTip
                 title="Dica de Escolha"
-                text="Não se preocupe com o rosto da modelo — o seu rosto e suas características virão das fotos que você enviar no WhatsApp. Escolha as fotos onde você gostar da roupa, pose e iluminação!"
+                text="Você pode misturar as fotos do catálogo acima com as fotos que você mesmo anexar. Não se preocupe com o rosto da modelo — o seu rosto virá das fotos que você enviar no WhatsApp!"
               />
             )}
           </StepShell>
@@ -773,9 +1059,9 @@ function EnsaioPage() {
             title="Como você quer o cabelo?"
             hint="Toque na foto que tem o cabelo que você quer copiar, ou selecione a opção abaixo para manter o seu cabelo natural."
           >
-            {chosenRefs.length > 0 ? (
+            {allChosenRefs.length > 0 ? (
               <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3">
-                {chosenRefs.map((img, idx) => {
+                {allChosenRefs.map((img, idx) => {
                   const isSelected = config.hair === img.id;
                   return (
                     <button
@@ -815,6 +1101,8 @@ function EnsaioPage() {
                             <>
                               <Check className="size-3.5 text-emerald-400" /> Copiar este cabelo
                             </>
+                          ) : img.isCustom ? (
+                            `Copiar da sua foto #${idx + 1}`
                           ) : (
                             `Copiar foto #${idx + 1}`
                           )}
@@ -908,11 +1196,11 @@ function EnsaioPage() {
             }
           >
             {/* Galeria das fotos de referência escolhidas */}
-            {chosenRefs.length > 0 ? (
+            {allChosenRefs.length > 0 ? (
               <div className="mb-6 rounded-xl border border-border/80 bg-card/60 p-4 sm:p-5">
                 <div className="mb-3.5 flex items-center justify-between">
                   <p className="eyebrow text-foreground/80 font-medium">
-                    {chosenRefs.length} {chosenRefs.length === 1 ? "Referência Escolhida" : "Referências Escolhidas"}
+                    {allChosenRefs.length} {allChosenRefs.length === 1 ? "Referência Escolhida" : "Referências Escolhidas"}
                   </p>
                   {!config.confirmed ? (
                     <button
@@ -926,7 +1214,7 @@ function EnsaioPage() {
                 </div>
 
                 <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4">
-                  {chosenRefs.map((img, idx) => (
+                  {allChosenRefs.map((img, idx) => (
                     <div
                       key={img.id}
                       className="group relative aspect-[3/4] overflow-hidden rounded-lg border border-border/80 bg-muted"
@@ -945,6 +1233,11 @@ function EnsaioPage() {
                       <span className="absolute bottom-1.5 right-1.5 flex size-5 items-center justify-center rounded-full bg-black/70 text-[0.65rem] font-medium text-white">
                         #{idx + 1}
                       </span>
+                      {img.isCustom ? (
+                        <span className="absolute left-1.5 top-1.5 rounded bg-amber-500/90 px-1 py-0.5 text-[0.6rem] font-semibold text-white backdrop-blur-sm shadow">
+                          Sua
+                        </span>
+                      ) : null}
                     </div>
                   ))}
                 </div>
@@ -981,7 +1274,7 @@ function EnsaioPage() {
                       config.hair === "manter"
                         ? "Manter meu cabelo natural"
                         : config.hair
-                          ? `Copiar foto #${(chosenRefIds.indexOf(config.hair) + 1) || "de referência"}`
+                          ? `Copiar foto #${(allChosenRefs.findIndex((r) => r.id === config.hair) + 1) || "de referência"}`
                           : undefined,
                     stepId: "cabelo" as StepId,
                   },
@@ -1097,8 +1390,8 @@ function EnsaioPage() {
               className="w-full flex items-center justify-center gap-3 rounded-2xl bg-foreground text-background py-4 text-base font-semibold shadow-2xl shadow-foreground/20 transition-transform active:scale-[0.98] animate-in fade-in-50 slide-in-from-bottom-2 duration-300"
             >
               {step === "galeria" ? (
-                chosenRefIds.length < order.photoCount ? (
-                  <>{chosenRefIds.length > 0 ? `${chosenRefIds.length} de ${order.photoCount} fotos escolhidas` : "Escolha as fotos acima"} <ArrowRight className="size-5" /></>
+                totalSelectedCount < order.photoCount ? (
+                  <>{totalSelectedCount > 0 ? `${totalSelectedCount} de ${order.photoCount} fotos escolhidas` : "Escolha ou envie as fotos acima"} <ArrowRight className="size-5" /></>
                 ) : (
                   <>Continuar <ArrowRight className="size-5" /></>
                 )

@@ -202,11 +202,10 @@ function OrderDetailPage() {
     selections,
     catalog: catalogItems,
   });
-  const references = referenceImages(catalogItems, selections);
+  const references = referenceImages(catalogItems, selections, configData.custom_references);
   const fullText = summaryToText(sections);
   const isDelivered = order.status === "Entregue";
   const deadlineInfo = getDeadlineInfo(order);
-  const isUrgent = order.priority === "alta" || order.priority === "urgente";
 
   async function copy(key: string, text: string) {
     await navigator.clipboard.writeText(text);
@@ -248,25 +247,27 @@ function OrderDetailPage() {
 
           {!isDelivered ? (
             <Button
-              variant="outline"
-              onClick={() => {
-                update.mutate({ status: "Entregue" });
-                toast.success(`Pedido #${order.order_number} marcado como entregue!`);
-              }}
-              className="border-emerald-600/40 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:border-emerald-500/30 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
+              onClick={() =>
+                update.mutate({
+                  status: "Entregue",
+                  completed_at: new Date().toISOString(),
+                })
+              }
+              className="bg-emerald-700 hover:bg-emerald-800 text-white"
             >
-              <CheckCircle2 className="mr-2 size-4" />
+              <Check className="mr-2 size-4" />
               Marcar como entregue
             </Button>
           ) : (
             <Button
               variant="outline"
-              onClick={() => {
-                update.mutate({ status: "Em produção" });
-                toast.success(`Pedido #${order.order_number} reaberto.`);
-              }}
+              onClick={() =>
+                update.mutate({
+                  status: "Pronto para produção",
+                  completed_at: null,
+                })
+              }
             >
-              <RotateCcw className="mr-2 size-4" />
               Reabrir pedido
             </Button>
           )}
@@ -279,12 +280,10 @@ function OrderDetailPage() {
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle className="font-display text-2xl font-light">
-                  Excluir pedido #{order.order_number}?
-                </AlertDialogTitle>
-                <AlertDialogDescription className="text-sm leading-relaxed">
-                  Tem certeza que deseja excluir o pedido de <strong>{order.client_name}</strong>?
-                  Esta ação não pode ser desfeita e removerá todas as referências salvas.
+                <AlertDialogTitle>Excluir pedido #{order.order_number}?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Esta ação não pode ser desfeita. Todos os dados deste pedido e suas escolhas
+                  serão removidos.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -350,17 +349,6 @@ function OrderDetailPage() {
         <Badge variant={isDelivered ? "default" : "secondary"} className={isDelivered ? "bg-emerald-700 text-white" : ""}>
           {order.status}
         </Badge>
-        <Badge
-          variant={
-            isUrgent
-              ? "destructive"
-              : order.priority === "baixa"
-                ? "outline"
-                : "secondary"
-          }
-        >
-          {isUrgent ? "Prioridade Urgente" : order.priority === "baixa" ? "Prioridade Baixa" : "Prioridade Normal"}
-        </Badge>
         <span
           className={cn(
             "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium",
@@ -370,29 +358,25 @@ function OrderDetailPage() {
           )}
         >
           <Clock className="size-3" />
-          {deadlineInfo.label}
+          Prazo: {deadlineInfo.label}
         </span>
-        <Badge variant="outline">{order.photo_count} fotos</Badge>
-        {configData.confirmed ? (
-          <Badge variant="outline" className="border-emerald-600/30 text-emerald-700 dark:text-emerald-400">
-            Configuração confirmada pelo cliente
-          </Badge>
-        ) : (
-          <Badge variant="outline">Configuração em andamento</Badge>
-        )}
-        {order.client_phone ? <Badge variant="outline">{order.client_phone}</Badge> : null}
       </div>
 
-      <div className="grid gap-10 lg:grid-cols-[1.2fr_1fr]">
-        <div className="space-y-4">
+      <div className="grid gap-8 lg:grid-cols-3">
+        <div className="space-y-6 lg:col-span-2">
           {sections.map((section) => (
-            <div key={section.title} className="rounded-lg border border-border bg-card p-5 shadow-sm">
-              <div className="mb-3 flex items-start justify-between gap-4">
+            <div
+              key={section.title}
+              className="rounded-xl border border-border bg-card p-6 shadow-sm"
+            >
+              <div className="mb-3 flex items-center justify-between">
                 <p className="eyebrow">{section.title}</p>
                 <Button
                   variant="ghost"
-                  size="sm"
-                  onClick={() => copy(section.title, `${section.title}\n${section.body}`)}
+                  size="icon"
+                  className="size-8 text-muted-foreground hover:text-foreground"
+                  onClick={() => copy(section.title, section.body)}
+                  title="Copiar esta seção"
                 >
                   {copiedKey === section.title ? (
                     <Check className="size-4 text-emerald-600" />
@@ -412,7 +396,7 @@ function OrderDetailPage() {
           <p className="eyebrow">
             Referências visuais escolhidas ({references.length})
           </p>
-          <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-2">
+          <div className="mt-4 grid grid-cols-2 gap-4">
             {references.map((item, index) => (
               <div
                 key={item.id}
@@ -436,6 +420,11 @@ function OrderDetailPage() {
                   <span className="absolute left-2.5 top-2.5 flex size-7 items-center justify-center rounded-full bg-foreground/90 text-xs font-semibold text-background shadow">
                     #{index + 1}
                   </span>
+                  {item.isCustom ? (
+                    <span className="absolute right-2.5 top-2.5 rounded bg-amber-500 px-2 py-0.5 text-[0.65rem] font-bold text-white shadow">
+                      ✨ Do Cliente
+                    </span>
+                  ) : null}
                 </div>
                 <div className="flex items-center justify-between p-2.5 text-xs text-muted-foreground">
                   <span className="capitalize font-medium text-foreground">

@@ -680,7 +680,8 @@ export function AdminProfileDialog({
                       <div>
                         <p className="font-semibold">Falha ao conectar com {aiProvider.toUpperCase()}</p>
                         <p className="mt-0.5 text-[0.72rem] opacity-90 leading-relaxed">
-                          {activeHealth.message} — {activeHealth.detail}
+                          {"message" in activeHealth ? activeHealth.message : "Erro desconhecido"}
+                          {"detail" in activeHealth && activeHealth.detail ? ` — ${activeHealth.detail}` : ""}
                         </p>
                       </div>
                     </div>

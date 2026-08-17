@@ -18,47 +18,68 @@ export type Database = {
         Row: {
           active: boolean
           ai_description: string
+          ambiance: string | null
           category: string
           code: string
           color: string | null
           created_at: string
+          gender: string | null
+          has_age_number: boolean
+          has_cake: boolean
           id: string
           image_url: string | null
           name: string
+          people_count: number | null
           position: number
+          session_types: string[]
           style: string | null
           tags: string[]
           updated_at: string
+          vibe: string | null
         }
         Insert: {
           active?: boolean
           ai_description?: string
+          ambiance?: string | null
           category?: string
           code?: string
           color?: string | null
           created_at?: string
+          gender?: string | null
+          has_age_number?: boolean
+          has_cake?: boolean
           id?: string
           image_url?: string | null
           name?: string
+          people_count?: number | null
           position?: number
+          session_types?: string[]
           style?: string | null
           tags?: string[]
           updated_at?: string
+          vibe?: string | null
         }
         Update: {
           active?: boolean
           ai_description?: string
+          ambiance?: string | null
           category?: string
           code?: string
           color?: string | null
           created_at?: string
+          gender?: string | null
+          has_age_number?: boolean
+          has_cake?: boolean
           id?: string
           image_url?: string | null
           name?: string
+          people_count?: number | null
           position?: number
+          session_types?: string[]
           style?: string | null
           tags?: string[]
           updated_at?: string
+          vibe?: string | null
         }
         Relationships: []
       }

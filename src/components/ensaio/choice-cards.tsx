@@ -97,13 +97,13 @@ export function ReferencePhotoPicker({
   badgeText = "Copiar desta foto",
   onPreview,
 }: {
-  references: { id: string; imageUrl: string | null; isCustom?: boolean; name?: string }[];
-  selectedId?: string | null;
-  selectedIds?: string[];
+  references: { id: string; imageUrl: string | null; isCustom?: boolean | undefined; name?: string | undefined }[];
+  selectedId?: string | null | undefined;
+  selectedIds?: string[] | undefined;
   onSelect: (id: string) => void;
-  multi?: boolean;
-  badgeText?: string;
-  onPreview?: (url: string) => void;
+  multi?: boolean | undefined;
+  badgeText?: string | undefined;
+  onPreview?: ((url: string) => void) | undefined;
 }) {
   if (references.length === 0) return null;
 

@@ -56,8 +56,8 @@ export function buildSummarySections(params: {
     hairDescription = "Manter como está nas fotos de identidade que o cliente enviará";
   } else if (config.hair) {
     const hairIdx = allRefsUnified.findIndex((r) => r.id === config.hair);
-    if (hairIdx >= 0) {
-      const refItem = allRefsUnified[hairIdx];
+    if (hairIdx >= 0 && allRefsUnified[hairIdx]) {
+      const refItem = allRefsUnified[hairIdx]!;
       hairDescription = refItem.isCustom
         ? `Copiar cabelo da Foto Própria do Cliente #${hairIdx + 1}`
         : `Copiar cabelo da Foto de Referência #${hairIdx + 1}`;
@@ -71,8 +71,8 @@ export function buildSummarySections(params: {
   if (config.outfit_mode === "fixa") {
     if (config.outfit_reference_id) {
       const outfitIdx = allRefsUnified.findIndex((r) => r.id === config.outfit_reference_id);
-      if (outfitIdx >= 0) {
-        const refItem = allRefsUnified[outfitIdx];
+      if (outfitIdx >= 0 && allRefsUnified[outfitIdx]) {
+        const refItem = allRefsUnified[outfitIdx]!;
         outfitDescription = refItem.isCustom
           ? `Uma roupa só (Look da Foto Própria #${outfitIdx + 1})`
           : `Uma roupa só (Look da Foto de Referência #${outfitIdx + 1})`;
@@ -93,8 +93,8 @@ export function buildSummarySections(params: {
   } else if (config.scenario_mode === "fixo") {
     if (config.scenario_reference_id) {
       const scenarioIdx = allRefsUnified.findIndex((r) => r.id === config.scenario_reference_id);
-      if (scenarioIdx >= 0) {
-        const refItem = allRefsUnified[scenarioIdx];
+      if (scenarioIdx >= 0 && allRefsUnified[scenarioIdx]) {
+        const refItem = allRefsUnified[scenarioIdx]!;
         scenarioDescription = refItem.isCustom
           ? `Um cenário só (Cenário da Foto Própria #${scenarioIdx + 1})`
           : `Um cenário só (Cenário da Foto de Referência #${scenarioIdx + 1})`;

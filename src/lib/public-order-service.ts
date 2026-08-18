@@ -119,17 +119,29 @@ export async function fetchPublicOrder(token: string): Promise<PublicOrderPayloa
       makeup: config?.makeup ?? null,
       hair: config?.hair ?? null,
       expression:
-        (config?.category_answers as Record<string, unknown>)?._expression as string ?? null,
+        (config?.category_answers as Record<string, unknown>)?.[
+          "_expression"
+        ] as string ?? null,
       outfit_reference_id:
-        (config?.category_answers as Record<string, unknown>)?._outfit_reference_id as string ?? null,
+        (config?.category_answers as Record<string, unknown>)?.[
+          "_outfit_reference_id"
+        ] as string ?? null,
       outfit_reference_ids:
-        (config?.category_answers as Record<string, unknown>)?._outfit_reference_ids as string[] ?? [],
+        (config?.category_answers as Record<string, unknown>)?.[
+          "_outfit_reference_ids"
+        ] as string[] ?? [],
       scenario_mode:
-        (config?.category_answers as Record<string, unknown>)?._scenario_mode as string ?? null,
+        (config?.category_answers as Record<string, unknown>)?.[
+          "_scenario_mode"
+        ] as string ?? null,
       scenario_reference_id:
-        (config?.category_answers as Record<string, unknown>)?._scenario_reference_id as string ?? null,
+        (config?.category_answers as Record<string, unknown>)?.[
+          "_scenario_reference_id"
+        ] as string ?? null,
       scenario_reference_ids:
-        (config?.category_answers as Record<string, unknown>)?._scenario_reference_ids as string[] ?? [],
+        (config?.category_answers as Record<string, unknown>)?.[
+          "_scenario_reference_ids"
+        ] as string[] ?? [],
       color_palette: config?.color_palette ?? null,
       lighting_mood: config?.lighting_mood ?? null,
       visible_text_answer: config?.visible_text_answer ?? "",
@@ -259,25 +271,25 @@ export async function savePublicOrderClient(params: {
 
       const mergedAnswers = { ...newAnswers };
       if (params.config.custom_references !== undefined) {
-        mergedAnswers._custom_references = params.config.custom_references;
+        mergedAnswers["_custom_references"] = params.config.custom_references;
       }
       if (params.config.expression !== undefined) {
-        mergedAnswers._expression = params.config.expression;
+        mergedAnswers["_expression"] = params.config.expression;
       }
       if (params.config.outfit_reference_id !== undefined) {
-        mergedAnswers._outfit_reference_id = params.config.outfit_reference_id;
+        mergedAnswers["_outfit_reference_id"] = params.config.outfit_reference_id;
       }
       if (params.config.outfit_reference_ids !== undefined) {
-        mergedAnswers._outfit_reference_ids = params.config.outfit_reference_ids;
+        mergedAnswers["_outfit_reference_ids"] = params.config.outfit_reference_ids;
       }
       if (params.config.scenario_mode !== undefined) {
-        mergedAnswers._scenario_mode = params.config.scenario_mode;
+        mergedAnswers["_scenario_mode"] = params.config.scenario_mode;
       }
       if (params.config.scenario_reference_id !== undefined) {
-        mergedAnswers._scenario_reference_id = params.config.scenario_reference_id;
+        mergedAnswers["_scenario_reference_id"] = params.config.scenario_reference_id;
       }
       if (params.config.scenario_reference_ids !== undefined) {
-        mergedAnswers._scenario_reference_ids = params.config.scenario_reference_ids;
+        mergedAnswers["_scenario_reference_ids"] = params.config.scenario_reference_ids;
       }
 
       patch["category_answers"] = mergedAnswers;

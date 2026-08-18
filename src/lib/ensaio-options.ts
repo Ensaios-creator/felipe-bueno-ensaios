@@ -118,7 +118,7 @@ export const SESSION_SUBTYPES_MAP: Record<string, SubtypeOption[]> = {
   ],
 };
 
-export const BIRTHDAY_SUBTYPES = SESSION_SUBTYPES_MAP.aniversario;
+export const BIRTHDAY_SUBTYPES = SESSION_SUBTYPES_MAP['aniversario'];
 
 export const FRAMING_OPTIONS = [
   { value: "corpo-inteiro", label: "Corpo inteiro", icon: "🧍", hint: "Aparece o look completo da cabeça aos pés" },
@@ -463,4 +463,708 @@ export const CATEGORY_QUESTIONS: Record<string, CategoryQuestion[]> = {
 export function labelFor(options: { value: string; label: string }[], value?: string | null) {
   if (!value) return "";
   return options.find((o) => o.value === value)?.label ?? value;
+}
+
+// ─── MOTOR DE REGRAS DE SUBNICHOS E FILTRAGEM COMBINATÓRIA ──────────────────
+
+export interface SubtypeFilterRule {
+  subtypeValue: string;
+  parentSessionType: string;
+  positiveKeywords: string[];
+  preferredSessionTypes?: string[];
+  negativeKeywords?: string[];
+  negativeSessionTypes?: string[];
+  minPeopleCount?: number;
+  maxPeopleCount?: number;
+  exactPeopleCount?: number;
+  requiredGender?: "feminino" | "masculino" | "misto";
+  excludedGenders?: ("feminino" | "masculino" | "misto")[];
+  preferredAmbiances?: string[];
+  excludedAmbiances?: string[];
+  requiresCake?: boolean;
+  requiresAgeNumber?: boolean;
+}
+
+export const SUBTYPE_RULES: SubtypeFilterRule[] = [
+  // ── ANIVERSÁRIO ──────────────────────────────────────────────────────────
+  {
+    subtypeValue: "Meu aniversário",
+    parentSessionType: "aniversario",
+    positiveKeywords: [
+      "adulto", "champanhe", "taça", "taca", "gala", "glamour", "mulher", "homem",
+      "vinho", "festa adulta", "comemoração", "comemoracao", "balões dourados",
+      "baloes dourados", "balões prateados", "baloes prateados", "salto alto"
+    ],
+    preferredSessionTypes: ["aniversario", "estudio"],
+    negativeKeywords: [
+      "infantil", "criança", "crianca", "bebê", "bebe", "kids", "smash the cake",
+      "smash", "mesversário", "mesversario", "newborn", "brinquedo", "15 anos",
+      "debutante", "bodas", "urso", "ursinho"
+    ],
+    negativeSessionTypes: ["infantil"],
+    maxPeopleCount: 1,
+  },
+  {
+    subtypeValue: "Aniversário infantil",
+    parentSessionType: "aniversario",
+    positiveKeywords: [
+      "infantil", "criança", "crianca", "bebê", "bebe", "kids", "1 ano", "2 anos",
+      "3 anos", "4 anos", "5 anos", "6 anos", "7 anos", "8 anos", "9 anos", "10 anos",
+      "11 anos", "12 anos", "brinquedo", "mesversário", "mesversario", "smash",
+      "smash the cake", "balões coloridos", "baloes coloridos", "bolo infantil",
+      "ursinho", "fantasia", "tema infantil", "aniversário infantil", "aniversario infantil"
+    ],
+    preferredSessionTypes: ["aniversario", "infantil"],
+    negativeKeywords: [
+      "champanhe", "taça de champanhe", "taca de champanhe", "vinho", "taça de vinho",
+      "sensual", "boudoir", "lingerie", "executivo", "blazer", "smoking", "noiva",
+      "gala adulto", "gala adulta", "salto alto", "casamento", "bodas", "corporativo"
+    ],
+    negativeSessionTypes: ["sensual", "corporativo", "casamento"],
+  },
+  {
+    subtypeValue: "Aniversário 15 anos",
+    parentSessionType: "aniversario",
+    positiveKeywords: [
+      "15 anos", "debutante", "15", "coroa", "tiara", "vestido de gala", "vestido de debutante",
+      "valsa", "princesa", "gala", "brilho", "quinze anos"
+    ],
+    preferredSessionTypes: ["aniversario"],
+    negativeKeywords: [
+      "bebe", "bebê", "criança pequena", "crianca pequena", "smash the cake", "smash",
+      "newborn", "mesversário", "mesversario", "bodas", "corporativo", "executivo", "jaleco"
+    ],
+    negativeSessionTypes: ["corporativo"],
+  },
+  {
+    subtypeValue: "Aniversário casal",
+    parentSessionType: "aniversario",
+    positiveKeywords: [
+      "casal", "bodas", "romântico", "romantico", "dois", "brinde a dois", "namorados",
+      "parceiro", "marido", "esposa", "comemoração a dois"
+    ],
+    preferredSessionTypes: ["aniversario", "casal"],
+    minPeopleCount: 2,
+    negativeKeywords: [
+      "bebe", "bebê", "infantil", "smash the cake", "newborn", "15 anos", "debutante"
+    ],
+  },
+  {
+    subtypeValue: "Aniversário empresarial",
+    parentSessionType: "aniversario",
+    positiveKeywords: [
+      "corporativo", "empresa", "equipe", "escritório", "escritorio",
+      "comemoração da empresa", "negócios", "trabalho"
+    ],
+    preferredSessionTypes: ["aniversario", "corporativo"],
+    negativeKeywords: [
+      "infantil", "bebe", "bebê", "sensual", "lingerie", "debutante", "15 anos", "noiva"
+    ],
+  },
+  {
+    subtypeValue: "Outro aniversário",
+    parentSessionType: "aniversario",
+    positiveKeywords: ["aniversario", "aniversário", "baloes", "bolo", "festa"],
+    preferredSessionTypes: ["aniversario"],
+  },
+
+  // ── INFANTIL ─────────────────────────────────────────────────────────────
+  {
+    subtypeValue: "Mesversário / Acompanhamento",
+    parentSessionType: "infantil",
+    positiveKeywords: [
+      "mesversario", "mesversário", "acompanhamento", "meses", "bebe", "bebê",
+      "manta", "fofo", "newborn", "pequeno", "cesta"
+    ],
+    preferredSessionTypes: ["infantil"],
+    negativeKeywords: ["adulto", "corporativo", "sensual", "casamento", "15 anos", "debutante", "champanhe"],
+  },
+  {
+    subtypeValue: "Smash the Cake / 1 Ano",
+    parentSessionType: "infantil",
+    positiveKeywords: [
+      "smash the cake", "smash", "1 ano", "1 aninho", "primeiro aninho", "bolo",
+      "lambuzar", "confeito", "bolo infantil"
+    ],
+    preferredSessionTypes: ["infantil", "aniversario"],
+    negativeKeywords: ["adulto", "corporativo", "sensual", "casamento", "champanhe"],
+  },
+  {
+    subtypeValue: "Criança / Temático / Fantasia",
+    parentSessionType: "infantil",
+    positiveKeywords: [
+      "fantasia", "personagem", "heroi", "herói", "super-heroi", "princesa",
+      "tematico", "temático", "ludico", "lúdico", "desenho", "crianca", "criança",
+      "ursinho", "safari"
+    ],
+    preferredSessionTypes: ["infantil"],
+    negativeKeywords: ["adulto", "corporativo", "sensual", "casamento"],
+  },
+  {
+    subtypeValue: "Newborn / Recém-nascido",
+    parentSessionType: "infantil",
+    positiveKeywords: [
+      "newborn", "recem-nascido", "recém-nascido", "cesta", "manta", "dormindo",
+      "primeiros dias", "bebe", "bebê", "delicado"
+    ],
+    preferredSessionTypes: ["infantil"],
+    negativeKeywords: ["adulto", "criança grande", "10 anos", "15 anos", "corporativo", "sensual", "champanhe"],
+  },
+  {
+    subtypeValue: "Irmãos / Família",
+    parentSessionType: "infantil",
+    positiveKeywords: [
+      "irmaos", "irmãos", "familia", "família", "pais", "crianças e pais", "dupla infantil"
+    ],
+    preferredSessionTypes: ["infantil"],
+    minPeopleCount: 2,
+    negativeKeywords: ["sensual", "boudoir", "lingerie"],
+  },
+  {
+    subtypeValue: "Outro infantil",
+    parentSessionType: "infantil",
+    positiveKeywords: ["infantil", "criança", "crianca", "bebe", "bebê"],
+    preferredSessionTypes: ["infantil"],
+  },
+
+  // ── ESTÚDIO ──────────────────────────────────────────────────────────────
+  {
+    subtypeValue: "Fundo liso clean",
+    parentSessionType: "estudio",
+    positiveKeywords: [
+      "fundo liso", "clean", "minimalista", "fundo infinito", "estúdio", "estudio",
+      "ciclorama", "fundo neutro", "fundo cinza", "fundo branco", "fundo preto"
+    ],
+    preferredAmbiances: ["estudio"],
+    preferredSessionTypes: ["estudio"],
+  },
+  {
+    subtypeValue: "Editorial / Moda de revista",
+    parentSessionType: "estudio",
+    positiveKeywords: [
+      "editorial", "moda", "revista", "rim light", "passarela", "glamour",
+      "high fashion", "iluminação de revista", "luz de recorte", "dramático"
+    ],
+    preferredSessionTypes: ["estudio"],
+  },
+  {
+    subtypeValue: "Casual chic",
+    parentSessionType: "estudio",
+    positiveKeywords: [
+      "casual chic", "descontraído", "descontraido", "moderno", "casual",
+      "elegante", "autoral", "jaqueta", "blazer leve"
+    ],
+    preferredSessionTypes: ["estudio"],
+  },
+  {
+    subtypeValue: "Cenário decorado",
+    parentSessionType: "estudio",
+    positiveKeywords: [
+      "cenario decorado", "cenário decorado", "poltrona", "cadeira",
+      "luzes de estúdio", "elementos de estúdio", "cenografia"
+    ],
+    preferredAmbiances: ["decorado", "estudio"],
+    preferredSessionTypes: ["estudio"],
+  },
+
+  // ── CASAL ────────────────────────────────────────────────────────────────
+  {
+    subtypeValue: "Namoro / Pré-Wedding",
+    parentSessionType: "casal",
+    positiveKeywords: [
+      "namoro", "pre-wedding", "pré-wedding", "noivado", "aliança", "alianca", "alianças"
+    ],
+    preferredSessionTypes: ["casal", "casamento"],
+    minPeopleCount: 2,
+  },
+  {
+    subtypeValue: "Romântico / Intimista",
+    parentSessionType: "casal",
+    positiveKeywords: [
+      "romantico", "romântico", "intimista", "abraço", "abraco", "carinho",
+      "beijo", "afeto", "olhar apaixonado", "conexão", "cumplicidade"
+    ],
+    preferredSessionTypes: ["casal"],
+    minPeopleCount: 2,
+  },
+  {
+    subtypeValue: "Casual ao ar livre",
+    parentSessionType: "casal",
+    positiveKeywords: [
+      "ao ar livre", "ar livre", "praia", "campo", "golden hour", "pôr do sol",
+      "por do sol", "natureza", "parque", "gramado"
+    ],
+    preferredAmbiances: ["natureza", "externo"],
+    preferredSessionTypes: ["casal"],
+    minPeopleCount: 2,
+  },
+  {
+    subtypeValue: "Bodas / Comemoração",
+    parentSessionType: "casal",
+    positiveKeywords: [
+      "bodas", "comemoração", "comemoracao", "brinde", "anos juntos",
+      "bodas de prata", "bodas de ouro", "champanhe a dois"
+    ],
+    preferredSessionTypes: ["casal", "aniversario"],
+    minPeopleCount: 2,
+  },
+
+  // ── CASAMENTO ────────────────────────────────────────────────────────────
+  {
+    subtypeValue: "Civil / Cartório",
+    parentSessionType: "casamento",
+    positiveKeywords: [
+      "civil", "cartório", "cartorio", "terno claro", "vestido civil",
+      "minimalista", "moderno", "traje leve", "vestido curto ou midi"
+    ],
+    preferredSessionTypes: ["casamento"],
+    negativeKeywords: ["igreja tradicional", "altar de igreja", "véu de 5 metros", "catedral"],
+  },
+  {
+    subtypeValue: "Gala / Tradicional / Igreja",
+    parentSessionType: "casamento",
+    positiveKeywords: [
+      "gala", "tradicional", "igreja", "altar", "véu longo", "veu longo", "véu",
+      "vestido de noiva", "smoking", "buquê", "buque", "clássico", "classico", "catedral"
+    ],
+    preferredSessionTypes: ["casamento"],
+    negativeKeywords: ["praia descalço", "pé na areia", "casual tech"],
+  },
+  {
+    subtypeValue: "Praia / Campo / Pé na areia",
+    parentSessionType: "casamento",
+    positiveKeywords: [
+      "praia", "campo", "pé na areia", "pe na areia", "pôr do sol", "por do sol",
+      "ao ar livre", "natureza", "vestido fluido", "leveza"
+    ],
+    preferredAmbiances: ["natureza", "externo"],
+    preferredSessionTypes: ["casamento"],
+  },
+  {
+    subtypeValue: "Pré ou Pós Wedding",
+    parentSessionType: "casamento",
+    positiveKeywords: [
+      "pre wedding", "pré wedding", "pos wedding", "pós wedding",
+      "ensaio dos noivos", "artístico", "vestido de noiva com calma"
+    ],
+    preferredSessionTypes: ["casamento", "casal"],
+  },
+
+  // ── GESTANTE ─────────────────────────────────────────────────────────────
+  {
+    subtypeValue: "Individual / Barriga em destaque",
+    parentSessionType: "gestante",
+    positiveKeywords: [
+      "individual", "barriga em destaque", "barriga à mostra", "barriga a mostra",
+      "barriga", "mãe solo", "espera do bebê"
+    ],
+    preferredSessionTypes: ["gestante"],
+    exactPeopleCount: 1,
+    requiredGender: "feminino",
+    negativeKeywords: ["com marido", "em família", "com filho mais velho", "casal"],
+  },
+  {
+    subtypeValue: "Com o marido / Em família",
+    parentSessionType: "gestante",
+    positiveKeywords: [
+      "marido", "família", "familia", "filho", "acompanhada", "casal",
+      "mãos na barriga", "abraço na barriga"
+    ],
+    preferredSessionTypes: ["gestante", "casal"],
+    minPeopleCount: 2,
+  },
+  {
+    subtypeValue: "Tecido fluido / Véu artístico",
+    parentSessionType: "gestante",
+    positiveKeywords: [
+      "tecido fluido", "tecido", "véu artístico", "veu artistico", "véu",
+      "voando", "escultural", "artístico", "poses esculturais", "tecido voando"
+    ],
+    preferredSessionTypes: ["gestante"],
+  },
+  {
+    subtypeValue: "Lingerie / Body rendado",
+    parentSessionType: "gestante",
+    positiveKeywords: [
+      "lingerie", "body", "renda", "rendado", "body delicado", "intimista", "suave", "elegante", "branco"
+    ],
+    preferredSessionTypes: ["gestante", "sensual"],
+  },
+
+  // ── CORPORATIVO ──────────────────────────────────────────────────────────
+  {
+    subtypeValue: "Executivo / Formal",
+    parentSessionType: "corporativo",
+    positiveKeywords: [
+      "executivo", "formal", "terno", "blazer", "gravata", "alta liderança",
+      "liderança", "diretoria", "corporativo clássico", "postura de poder"
+    ],
+    preferredSessionTypes: ["corporativo"],
+    negativeKeywords: ["jaleco", "estetoscópio", "festa", "balões", "sensual", "lingerie", "infantil", "bebe"],
+  },
+  {
+    subtypeValue: "Casual business / Tech",
+    parentSessionType: "corporativo",
+    positiveKeywords: [
+      "casual business", "tech", "startup", "notebook", "laptop", "moderno",
+      "descontraído", "descontraido", "camisa sem gravata", "consultoria"
+    ],
+    preferredSessionTypes: ["corporativo"],
+    negativeKeywords: ["jaleco", "estetoscópio", "sensual", "lingerie", "infantil"],
+  },
+  {
+    subtypeValue: "Médicos / Saúde / Estética",
+    parentSessionType: "corporativo",
+    positiveKeywords: [
+      "médico", "medico", "médica", "medica", "saúde", "saude", "estética", "estetica",
+      "jaleco", "clínica", "clinica", "consultório", "consultorio", "estetoscópio",
+      "estetoscopio", "dentista", "biomédica", "biomedica", "dermatologista",
+      "nutricionista", "hospital", "saúde e estética", "jaleco branco"
+    ],
+    preferredSessionTypes: ["corporativo"],
+    negativeKeywords: ["sensual", "lingerie", "festa infantil", "balões de aniversário", "baloes"],
+  },
+  {
+    subtypeValue: "Advogados / Jurídico",
+    parentSessionType: "corporativo",
+    positiveKeywords: [
+      "advogado", "advogada", "jurídico", "juridico", "direito", "oab", "tribunal",
+      "escritório", "escritorio", "biblioteca", "livros", "postura clássica", "advocacia"
+    ],
+    preferredSessionTypes: ["corporativo"],
+    negativeKeywords: ["jaleco", "estetoscópio", "sensual", "lingerie", "festa infantil", "balões"],
+  },
+  {
+    subtypeValue: "Criativos / Palestrantes / Coaches",
+    parentSessionType: "corporativo",
+    positiveKeywords: [
+      "palestrante", "coach", "autor", "autora", "criativo", "criativa", "microfone",
+      "palco", "expressivo", "carisma", "gestos", "livro autoral", "workshop"
+    ],
+    preferredSessionTypes: ["corporativo"],
+    negativeKeywords: ["jaleco", "estetoscópio", "sensual", "lingerie", "infantil"],
+  },
+
+  // ── RELIGIOSO ────────────────────────────────────────────────────────────
+  {
+    subtypeValue: "Batizado",
+    parentSessionType: "religioso",
+    positiveKeywords: [
+      "batizado", "vestes brancas", "vela", "bênção", "bencao", "água benta",
+      "agua benta", "bebê", "bebe", "criança", "padrinhos"
+    ],
+    preferredSessionTypes: ["religioso", "infantil"],
+  },
+  {
+    subtypeValue: "Primeira comunhão / Crisma",
+    parentSessionType: "religioso",
+    positiveKeywords: [
+      "primeira comunhão", "primeira comunhao", "comunhão", "crisma",
+      "sagrado", "eucaristia", "hóstia", "vela da comunhão"
+    ],
+    preferredSessionTypes: ["religioso", "infantil"],
+  },
+  {
+    subtypeValue: "Espiritual / Oração / Fé",
+    parentSessionType: "religioso",
+    positiveKeywords: [
+      "oração", "oracao", "fé", "fe", "bíblia", "biblia", "terço", "terco",
+      "crucifixo", "serenidade", "devoção", "devocional", "meditação"
+    ],
+    preferredSessionTypes: ["religioso"],
+  },
+
+  // ── SENSUAL ──────────────────────────────────────────────────────────────
+  {
+    subtypeValue: "Discreto & Elegante",
+    parentSessionType: "sensual",
+    positiveKeywords: [
+      "discreto", "elegante", "sofisticado", "sugestivo", "penumbra", "camisa aberta", "arte", "sutil"
+    ],
+    preferredSessionTypes: ["sensual", "estudio"],
+  },
+  {
+    subtypeValue: "Lingerie & Renda",
+    parentSessionType: "sensual",
+    positiveKeywords: [
+      "lingerie", "renda", "body rendado", "sensualidade", "preto", "rendado", "lingerie de renda", "marcante"
+    ],
+    preferredSessionTypes: ["sensual"],
+  },
+  {
+    subtypeValue: "Intimista / Quarto",
+    parentSessionType: "sensual",
+    positiveKeywords: [
+      "quarto", "cama", "lençóis", "lencois", "intimista", "roupão", "roupao", "conforto", "lençóis brancos", "seda"
+    ],
+    preferredAmbiances: ["interno"],
+    preferredSessionTypes: ["sensual"],
+  },
+  {
+    subtypeValue: "Silhueta & Sombras",
+    parentSessionType: "sensual",
+    positiveKeywords: [
+      "silhueta", "sombras", "penumbra", "luz dramática", "luz dramatica", "mistério", "misterio", "claroscuro", "luz de recorte"
+    ],
+    preferredSessionTypes: ["sensual", "estudio"],
+  },
+
+  // ── EVENTO ───────────────────────────────────────────────────────────────
+  {
+    subtypeValue: "Natal / Fim de ano",
+    parentSessionType: "evento",
+    positiveKeywords: [
+      "natal", "árvore de natal", "arvore de natal", "ano novo", "reveillon",
+      "réveillon", "luzes de natal", "pinheiro", "festas de fim de ano", "vermelho e dourado"
+    ],
+    preferredSessionTypes: ["evento"],
+  },
+  {
+    subtypeValue: "Formatura",
+    parentSessionType: "evento",
+    positiveKeywords: [
+      "formatura", "colação", "colacao", "beca", "diploma", "capelo", "conquista", "formando", "formanda"
+    ],
+    preferredSessionTypes: ["evento", "corporativo"],
+  },
+  {
+    subtypeValue: "Halloween / Fantasia",
+    parentSessionType: "evento",
+    positiveKeywords: [
+      "halloween", "abóbora", "abobora", "fantasia", "sombrio", "temático", "tematico", "bruxa", "vampiro"
+    ],
+    preferredSessionTypes: ["evento"],
+  },
+  {
+    subtypeValue: "Dia das Mães / Pais / Família",
+    parentSessionType: "evento",
+    positiveKeywords: [
+      "dia das mães", "dia das maes", "dia dos pais", "família", "familia",
+      "união", "uniao", "carinho familiar", "gerações"
+    ],
+    preferredSessionTypes: ["evento", "casal", "infantil"],
+  },
+];
+
+function normalizeText(text?: string | null): string {
+  if (!text) return "";
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+/**
+ * Motor Inteligente de Filtragem e Classificação de Referências.
+ * Combina nicho principal, subtipo escolhido, respostas contextuais e tags
+ * para retornar apenas as referências visualmente corretas e relevantes.
+ */
+export function filterAndRankCatalogItems<T extends {
+  id: string;
+  sessionTypes: string[];
+  tags?: string[];
+  style?: string | null;
+  vibe?: string | null;
+  ambiance?: string | null;
+  peopleCount?: number | null;
+  gender?: string | null;
+  hasCake?: boolean;
+  hasAgeNumber?: boolean;
+  position: number;
+}>(params: {
+  catalog: T[];
+  sessionType: string | null;
+  sessionSubtype?: string | null;
+  categoryAnswers?: Record<string, unknown>;
+}): T[] {
+  const { catalog, sessionType, sessionSubtype, categoryAnswers = {} } = params;
+
+  if (!sessionType) return catalog;
+
+  const normalizedSessionType = normalizeText(sessionType);
+  const normalizedSubtype = normalizeText(sessionSubtype);
+
+  // Encontra a regra do subtipo selecionado com matching bidirecional
+  const activeRule = SUBTYPE_RULES.find(
+    (r) =>
+      normalizeText(r.parentSessionType) === normalizedSessionType &&
+      (normalizedSubtype
+        ? normalizeText(r.subtypeValue) === normalizedSubtype ||
+          normalizedSubtype.includes(normalizeText(r.subtypeValue)) ||
+          normalizeText(r.subtypeValue).includes(normalizedSubtype)
+        : false)
+  );
+
+  type ScoredItem = {
+    item: T;
+    score: number;
+    isTier1Match: boolean;
+    isCompatible: boolean;
+  };
+
+  const scoredList: ScoredItem[] = [];
+
+  for (const item of catalog) {
+    const itemAny = item as Record<string, unknown>;
+    const rawTypes = (
+      (item.sessionTypes ?? (itemAny["session_types"] as string[] | undefined) ?? [])
+    ).map((t) => normalizeText(t));
+
+    const rawTags = (
+      (item.tags ?? (itemAny["tags"] as string[] | undefined) ?? [])
+    ).map((t) => normalizeText(t));
+
+    const rawStyle = normalizeText(item.style ?? (itemAny["style"] as string | null | undefined));
+    const rawVibe = normalizeText(item.vibe ?? (itemAny["vibe"] as string | null | undefined));
+    const rawAmbiance = normalizeText(item.ambiance ?? (itemAny["ambiance"] as string | null | undefined));
+    const rawGender = normalizeText(item.gender ?? (itemAny["gender"] as string | null | undefined));
+    const peopleCount = (item.peopleCount ?? (itemAny["people_count"] as number | null | undefined)) ?? null;
+    const hasCake = Boolean(item.hasCake ?? itemAny["has_cake"]);
+    const hasAgeNumber = Boolean(item.hasAgeNumber ?? itemAny["has_age_number"]);
+
+    const allTokens = [...rawTags, rawStyle, rawVibe, ...rawTypes];
+
+    // 1. VERIFICAÇÃO DE EXCLUSÃO RÍGIDA (Hard Exclusions)
+    let isExcluded = false;
+
+    // Regras de exclusão do subtipo ativo
+    if (activeRule) {
+      if (activeRule.negativeSessionTypes?.some((negType) => rawTypes.includes(normalizeText(negType)))) {
+        isExcluded = true;
+      }
+      if (activeRule.negativeKeywords?.some((negKw) => {
+        const normNeg = normalizeText(negKw);
+        return allTokens.some((tok) => tok.includes(normNeg));
+      })) {
+        isExcluded = true;
+      }
+      if (activeRule.excludedGenders?.some((g) => normalizeText(g) === rawGender)) {
+        isExcluded = true;
+      }
+      if (activeRule.excludedAmbiances?.some((a) => normalizeText(a) === rawAmbiance)) {
+        isExcluded = true;
+      }
+      if (activeRule.maxPeopleCount !== undefined && peopleCount && peopleCount > activeRule.maxPeopleCount) {
+        if (activeRule.maxPeopleCount === 1 && peopleCount > 1) isExcluded = true;
+      }
+      if (activeRule.exactPeopleCount !== undefined && peopleCount && peopleCount !== activeRule.exactPeopleCount) {
+        isExcluded = true;
+      }
+    }
+
+    // Exclusão entre nichos incompatíveis (ex: fotos puramente sensuais nunca vão para infantil/religioso)
+    if (normalizedSessionType === "infantil" || (normalizedSessionType === "aniversario" && normalizedSubtype.includes("infantil"))) {
+      if (rawTypes.includes("sensual") || rawTags.some((t) => t.includes("lingerie") || t.includes("champanhe") || t.includes("boudoir"))) {
+        isExcluded = true;
+      }
+    }
+    if (normalizedSessionType === "religioso") {
+      if (rawTypes.includes("sensual") || rawTags.some((t) => t.includes("lingerie") || t.includes("boudoir"))) {
+        isExcluded = true;
+      }
+    }
+    if (normalizedSessionType === "corporativo") {
+      if (rawTypes.includes("sensual") || rawTags.some((t) => t.includes("smash the cake") || t.includes("lingerie"))) {
+        isExcluded = true;
+      }
+    }
+
+    if (isExcluded) continue;
+
+    // 2. CÁLCULO DE RELEVÂNCIA E CLASSIFICAÇÃO EM TIERS
+    let score = 100;
+    let isTier1Match = false;
+
+    // Match no Tipo Principal
+    const hasPrimaryTypeMatch = rawTypes.includes(normalizedSessionType);
+    if (hasPrimaryTypeMatch) {
+      score += 60;
+    }
+
+    // Match de Subtipo
+    if (activeRule) {
+      // Sinais Positivos do Subtipo
+      const positiveMatches = activeRule.positiveKeywords.filter((posKw) => {
+        const normPos = normalizeText(posKw);
+        return allTokens.some((tok) => tok.includes(normPos));
+      });
+
+      const typeMatches = (activeRule.preferredSessionTypes || []).filter((prefType) =>
+        rawTypes.includes(normalizeText(prefType))
+      );
+
+      if (positiveMatches.length > 0 || typeMatches.length > 1) {
+        isTier1Match = true;
+        score += 100 + positiveMatches.length * 25;
+      }
+
+      if (activeRule.minPeopleCount && peopleCount && peopleCount >= activeRule.minPeopleCount) {
+        score += 30;
+      }
+      if (activeRule.requiredGender && rawGender === normalizeText(activeRule.requiredGender)) {
+        score += 30;
+      }
+      if (activeRule.preferredAmbiances && activeRule.preferredAmbiances.map(normalizeText).includes(rawAmbiance)) {
+        score += 25;
+      }
+    } else {
+      // Se não há regra específica, qualquer item do tipo principal é Tier 1
+      if (hasPrimaryTypeMatch) isTier1Match = true;
+    }
+
+    // 3. PONTUAÇÃO DE PERGUNTAS ESPECÍFICAS DA CATEGORIA
+    if (categoryAnswers["mostrar_idade"] === true && hasAgeNumber) {
+      score += 40;
+    }
+    if (hasCake && (normalizedSubtype.includes("smash") || normalizedSubtype.includes("bolo") || categoryAnswers["mostrar_idade"])) {
+      score += 35;
+    }
+    if (categoryAnswers["fundo"] === "Fundo liso" && rawAmbiance === "estudio") {
+      score += 30;
+    } else if (categoryAnswers["fundo"] === "Cenário elaborado" && (rawAmbiance === "decorado" || rawAmbiance === "interno")) {
+      score += 30;
+    }
+
+    // Compatibilidade com o nicho
+    const isCompatible = hasPrimaryTypeMatch || isTier1Match;
+
+    if (isTier1Match || isCompatible) {
+      scoredList.push({
+        item,
+        score,
+        isTier1Match,
+        isCompatible,
+      });
+    }
+  }
+
+  // 4. DIVISÃO EM TIERS E RETORNO
+  const tier1Items = scoredList.filter((s) => s.isTier1Match);
+  const tier2Compatible = scoredList.filter((s) => !s.isTier1Match && s.isCompatible);
+
+  // Se tivermos itens suficientes no Tier 1 (Match Exato de Subnicho), usamos apenas eles!
+  // Se forem poucos (menos de 6), mesclamos com o Tier 2 compatível ordenado por pontuação
+  let finalPool: ScoredItem[];
+  if (tier1Items.length >= 6 || !sessionSubtype) {
+    finalPool = tier1Items;
+  } else if (tier1Items.length > 0) {
+    finalPool = [...tier1Items, ...tier2Compatible];
+  } else {
+    // Se não há match direto de subtipo cadastrado no catálogo, usa todas as compatíveis
+    finalPool = tier2Compatible.length > 0 ? tier2Compatible : scoredList;
+  }
+
+  // Se o catálogo estiver vazio para este nicho, fallback seguro para estúdio neutro
+  if (finalPool.length === 0) {
+    const studioFallbacks = catalog.filter(
+      (img) =>
+        (img.sessionTypes || []).some((t) => normalizeText(t) === "estudio") ||
+        (img.sessionTypes || []).length === 0
+    );
+    return studioFallbacks;
+  }
+
+  finalPool.sort((a, b) => b.score - a.score || a.item.position - b.item.position);
+  return finalPool.map((s) => s.item);
 }

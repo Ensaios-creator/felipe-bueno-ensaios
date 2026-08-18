@@ -36,8 +36,8 @@ Sua tarefa é analisar a imagem de referência fotográfica enviada e extrair me
 
 REGRAS DE CLASSIFICAÇÃO:
 1. "session_types": Lista com um ou mais tipos de ensaio adequados para esta foto. Escolha APENAS entre:
-   - "aniversario" (se houver balões, números, bolo, taça, clima de comemoração de aniversário)
-   - "infantil" (crianças, bebês, mesversário, smash the cake, newborn, brinquedos, ensaio infantil)
+   - "aniversario" (se houver balões, números, bolo, taça, clima de comemoração de aniversário — de qualquer idade)
+   - "infantil" (crianças ou bebês como protagonistas: mesversário, smash the cake, newborn, brinquedos, fantasia infantil)
    - "estudio" (fundo neutro/infinito, iluminação de estúdio, poses clássicas)
    - "casal" (duas pessoas em clima romântico/cumplicidade)
    - "casamento" (noiva, vestido branco longo, terno, véu, altar, buquê)
@@ -48,34 +48,57 @@ REGRAS DE CLASSIFICAÇÃO:
    - "sensual" (roupa íntima, lingerie, clima intimista e artístico)
    - "outro" (quando não se encaixar nos anteriores)
 
+   ⚠️ REGRA CRÍTICA DE COMBINAÇÃO DE TIPOS:
+   - Foto de aniversário de CRIANÇA ou BEBÊ → use OBRIGATORIAMENTE ["aniversario", "infantil"]
+   - Foto de smash the cake, mesversário, newborn → use OBRIGATORIAMENTE ["infantil"]
+   - Foto de 15 anos / debutante → use ["aniversario", "evento"] e adicione tag "15anos" e "debutante"
+   - Foto de aniversário de ADULTO (sem criança) → use ["aniversario"] APENAS, nunca junto com "infantil"
+   - Foto de casamento civil (sem altar/véu/buquê formal) → use ["casamento", "casal"]
+   - Foto de ensaio corporativo médico/saúde → use ["corporativo"] e adicione tags como "jaleco", "estetoscopio", "saude"
+   - Foto de ensaio corporativo executivo/empresarial → use ["corporativo"] e adicione tags como "executivo", "blazer", "linkedin"
+   - Foto de gestante em casal → use ["gestante", "casal"]
+   - NUNCA misture "infantil" com "sensual", "casamento" ou "corporativo" no mesmo item
+
 2. "people_count": Número inteiro de pessoas visíveis em destaque na foto (ex: 1, 2, 3...).
 3. "gender": Escolha estritamente um: "feminino", "masculino" ou "misto".
 4. "ambiance": Escolha estritamente um:
    - "estudio" (fundo liso, ciclorama, fundo infinito ou estúdio fotográfico)
    - "decorado" (cenário com balões, flores, festa ou decoração elaborada)
-   - "interno" (dentro de casa, sala, quarto, hotel, escritório)
+   - "interno" (dentro de casa, sala, quarto, hotel, escritório, igreja)
    - "externo" (rua, cidade, arquitetura urbana, terraço)
    - "natureza" (praia, campo, jardim, parque)
 5. "vibe": Escolha estritamente um: "festa", "elegante", "descontraido", "poderoso", "delicado", "corporativo".
 6. "style": Termo curto em português que resume o estilo estético (ex: "glamour", "minimalista", "festa", "romantico", "editorial", "casual chic", "executivo").
 7. "has_cake": true se houver bolo ou velas visíveis na cena, false caso contrário.
 8. "has_age_number": true se houver balões numéricos de idade ou números visíveis na decoração, false caso contrário.
-9. "tags": Lista de 4 a 8 tags curtas em português descrevendo elementos visuais específicos (ex: ["vestido vermelho", "taça de champanhe", "balões dourados", "iluminação de revista", "salto alto"]).
+9. "tags": Lista de 5 a 10 tags curtas em português descrevendo elementos visuais específicos.
+   ⚠️ REGRAS OBRIGATÓRIAS PARA TAGS:
+   - SEMPRE inclua uma tag de faixa etária: "infantil", "bebe", "crianca", "15anos", "debutante", "adulto", "idoso" conforme visível
+   - Para corporativo: inclua tags de especialidade como "jaleco", "estetoscopio", "medico", "saude", "executivo", "blazer", "advogado", "engenheiro", "linkedin" conforme visível
+   - Para sensual: inclua "lingerie", "boudoir", "sensual"
+   - Para casamento: inclua "noiva", "noivo", "veu", "buque" conforme visível
+   - Para gestante: inclua "gestante", "gravida", "barriga" conforme visível
+   - Para religioso: inclua "batizado", "comunhao", "primeira_comunhao" conforme visível
+   - Para smash the cake: inclua "smash_the_cake", "bolo", "infantil"
+   - Para praia: inclua "praia", "areia", "mar"
+   - Para igreja/casamento religioso: inclua "igreja", "altar"
+   - Para casamento civil: inclua "civil", "cartorio" (se informal/sem véu)
+   - Exemplos de outras tags úteis: "vestido vermelho", "taça de champanhe", "balões dourados", "iluminação de revista", "salto alto", "smoking", "terno", "laço", "fantasia"
 10. "ai_description": Descrição detalhada e profissional em português (2 a 4 frases) explicando a iluminação, enquadramento, vestimenta, paleta de cores e atmosfera da imagem para servir de briefing e prompt de IA.
 
 IMPORTANTE: Retorne APENAS o objeto JSON puro, sem blocos de markdown adicionais, sem explicações extras.`;
 
 const JSON_SCHEMA_PROMPT = `{
-  "session_types": ["aniversario", "estudio"],
+  "session_types": ["aniversario", "infantil"],
   "people_count": 1,
   "gender": "feminino",
   "ambiance": "decorado",
-  "style": "festa",
+  "style": "festa infantil",
   "vibe": "festa",
-  "has_cake": false,
+  "has_cake": true,
   "has_age_number": true,
-  "tags": ["balões metalizados", "vestido de gala", "iluminação suave", "comemoração"],
-  "ai_description": "Retrato de estúdio com mulher em vestido de gala celebrando aniversário com balões..."
+  "tags": ["infantil", "crianca", "bolo", "baloes", "vestido_festa", "smash_the_cake", "decoracao_colorida"],
+  "ai_description": "Retrato de criança em festa de aniversário com cenário decorado, bolo com velas e balões coloridos. Iluminação suave e ambiente festivo com cores vibrantes. A criança usa vestido de festa e interage com a decoração de forma natural e espontânea."
 }`;
 
 export async function fileToBase64DataUrl(file: File | Blob): Promise<string> {

@@ -186,6 +186,7 @@ function CatalogPage() {
   const [peopleFilter, setPeopleFilter] = useState("todos");
   const [statusFilter, setStatusFilter] = useState("todos");
   const [genderFilter, setGenderFilter] = useState("todos");
+  const [tagFilter, setTagFilter] = useState("todos");
   const [selected, setSelected] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -319,21 +320,28 @@ function CatalogPage() {
         (statusFilter === "ativo" && item.active) ||
         (statusFilter === "oculto" && !item.active);
 
+      // Filtro por tag semântica (subnicho): verifica tags E session_types do item
+      const matchTag =
+        tagFilter === "todos" ||
+        item.tags.some((tag) => tag.toLowerCase() === tagFilter.toLowerCase()) ||
+        item.session_types.some((st) => st.toLowerCase() === tagFilter.toLowerCase());
+
       const matchSearch =
         !term ||
         item.style?.toLowerCase().includes(term) ||
         item.vibe?.toLowerCase().includes(term) ||
         item.ambiance?.toLowerCase().includes(term) ||
+        item.session_types.some((st) => st.toLowerCase().includes(term)) ||
         item.tags.some((tag) => tag.toLowerCase().includes(term));
 
-      return matchType && matchPeople && matchGender && matchStatus && matchSearch;
+      return matchType && matchPeople && matchGender && matchStatus && matchTag && matchSearch;
     });
-  }, [allRows, typeFilter, peopleFilter, genderFilter, statusFilter, term]);
+  }, [allRows, typeFilter, peopleFilter, genderFilter, statusFilter, tagFilter, term]);
 
   // Reset para página 1 quando os filtros mudam
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, typeFilter, peopleFilter, statusFilter, genderFilter]);
+  }, [search, typeFilter, peopleFilter, statusFilter, genderFilter, tagFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
   const paginatedItems = useMemo(() => {
@@ -457,6 +465,30 @@ function CatalogPage() {
             </SelectContent>
           </Select>
 
+          <Select value={tagFilter} onValueChange={setTagFilter}>
+            <SelectTrigger className="w-44">
+              <SelectValue placeholder="Subnicho / Tag" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Subnicho: todos</SelectItem>
+              <SelectItem value="infantil">🧸 Infantil / Bebê</SelectItem>
+              <SelectItem value="adulto">🎉 Adulto</SelectItem>
+              <SelectItem value="15anos">👑 15 Anos / Debutante</SelectItem>
+              <SelectItem value="smash_the_cake">🎂 Smash the Cake</SelectItem>
+              <SelectItem value="bebe">🍼 Newborn / Bebê</SelectItem>
+              <SelectItem value="gestante">🤰 Gestante</SelectItem>
+              <SelectItem value="noiva">👰 Casamento / Noiva</SelectItem>
+              <SelectItem value="civil">📋 Casamento Civil</SelectItem>
+              <SelectItem value="igreja">⛪ Casamento Igreja</SelectItem>
+              <SelectItem value="medico">🩺 Médico / Saúde</SelectItem>
+              <SelectItem value="executivo">💼 Executivo / Empresarial</SelectItem>
+              <SelectItem value="lingerie">🌹 Sensual / Boudoir</SelectItem>
+              <SelectItem value="praia">🏖️ Praia / Natureza</SelectItem>
+              <SelectItem value="batizado">✝️ Batizado / Religioso</SelectItem>
+              <SelectItem value="formatura">🎓 Formatura / Evento</SelectItem>
+            </SelectContent>
+          </Select>
+
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-32">
               <SelectValue placeholder="Status" />
@@ -471,6 +503,7 @@ function CatalogPage() {
           {(typeFilter !== "todos" ||
             peopleFilter !== "todos" ||
             genderFilter !== "todos" ||
+            tagFilter !== "todos" ||
             statusFilter !== "todos" ||
             search) && (
             <Button
@@ -480,6 +513,7 @@ function CatalogPage() {
                 setTypeFilter("todos");
                 setPeopleFilter("todos");
                 setGenderFilter("todos");
+                setTagFilter("todos");
                 setStatusFilter("todos");
                 setSearch("");
               }}

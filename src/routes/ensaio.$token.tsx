@@ -38,6 +38,7 @@ import {
   SCENARIO_MODES,
   SESSION_SUBTYPES_MAP,
   SESSION_TYPES,
+  filterAndRankCatalogItems,
 } from "@/lib/ensaio-options";
 import type {
   CatalogItemPublic,
@@ -303,6 +304,7 @@ function EnsaioPage() {
   }
 
   function toggleRef(id: string) {
+    if (!order) return;
     setSelections((prev) => {
       const base = prev ?? query.data?.selections ?? {};
       const current = base["referencia"] ?? [];
@@ -326,7 +328,7 @@ function EnsaioPage() {
   }
 
   async function handleUploadCustomReference(files: FileList | null) {
-    if (!files || files.length === 0) return;
+    if (!files || files.length === 0 || !order) return;
     const currentTotal =
       (picked["referencia"] ?? []).length + (config?.custom_references ?? []).length;
     if (currentTotal >= order.photoCount) {
@@ -364,114 +366,18 @@ function EnsaioPage() {
   }
 
   /**
-   * Filtragem ESTRITA e inteligente das fotos de referência:
-   * Garante que apenas fotos do nicho selecionado apareçam (ex: Casamento mostra apenas Casamento).
+   * Filtragem combinatória inteligente das fotos de referência.
+   * Usa o motor de regras semânticas (SUBTYPE_RULES + filterAndRankCatalogItems)
+   * para garantir que apenas fotos do subnicho correto apareçam,
+   * com exclusões rígidas e pontuação por relevância.
    */
   function getFilteredImages(): CatalogItemPublic[] {
-    const sessionType = config?.session_type ?? null;
-    const sessionSubtype = config?.session_subtype ?? null;
-    const categoryAnswers = config?.category_answers ?? {};
-
-    if (!sessionType) return catalog;
-
-    // 1. Filtragem estrita por tipo de ensaio
-    const strictMatches = catalog.filter((img) => {
-      const types = (img.sessionTypes || []).map((t) => t.toLowerCase());
-      const tags = (img.tags || []).map((t) => t.toLowerCase());
-
-      // Match direto no array de session_types
-      if (types.includes(sessionType.toLowerCase())) return true;
-
-      // Correspondências contextuais e sinônimos
-      if (sessionType === "infantil") {
-        if (types.includes("infantil") || tags.includes("infantil") || tags.includes("bebê") || tags.includes("crianca") || tags.includes("criança")) return true;
-        if (types.includes("aniversario") && tags.includes("infantil")) return true;
-      }
-      if (sessionType === "aniversario") {
-        if (types.includes("aniversario") || tags.includes("aniversário") || tags.includes("aniversario") || tags.includes("balões") || tags.includes("bolo")) return true;
-        if (sessionSubtype?.toLowerCase().includes("infantil") && types.includes("infantil")) return true;
-      }
-      if (sessionType === "casamento") {
-        if (types.includes("casamento") || tags.includes("casamento") || tags.includes("noiva") || tags.includes("noivo") || tags.includes("véu")) return true;
-      }
-      if (sessionType === "casal") {
-        if (types.includes("casal") || tags.includes("casal") || tags.includes("namorados") || tags.includes("romance")) return true;
-      }
-      if (sessionType === "gestante") {
-        if (types.includes("gestante") || tags.includes("gestante") || tags.includes("grávida") || tags.includes("gravida") || tags.includes("maternidade")) return true;
-      }
-      if (sessionType === "corporativo") {
-        if (types.includes("corporativo") || tags.includes("corporativo") || tags.includes("profissional") || tags.includes("executivo") || tags.includes("linkedin")) return true;
-      }
-      if (sessionType === "sensual") {
-        if (types.includes("sensual") || tags.includes("sensual") || tags.includes("lingerie") || tags.includes("boudoir")) return true;
-      }
-      if (sessionType === "religioso") {
-        if (types.includes("religioso") || tags.includes("religioso") || tags.includes("batizado") || tags.includes("comunhão") || tags.includes("espiritual")) return true;
-      }
-      if (sessionType === "evento") {
-        if (types.includes("evento") || tags.includes("evento") || tags.includes("natal") || tags.includes("formatura") || tags.includes("festa")) return true;
-      }
-
-      return false;
+    return filterAndRankCatalogItems({
+      catalog,
+      sessionType: config?.session_type ?? null,
+      sessionSubtype: config?.session_subtype ?? null,
+      categoryAnswers: config?.category_answers ?? {},
     });
-
-    // Se temos fotos correspondentes a esta categoria, usamos ESTRITAMENTE elas!
-    // NUNCA misturar fotos de casamento com corporativo ou sensual.
-    let pool = strictMatches;
-
-    // Se o catálogo do estúdio ainda não tiver fotos cadastradas para este tipo,
-    // usamos apenas as fotos marcadas como 'estudio' neutro como fallback temporário
-    if (pool.length === 0) {
-      pool = catalog.filter((img) => img.sessionTypes.includes("estudio") || img.sessionTypes.length === 0);
-    }
-
-    // 2. Pontuação e ordenação de relevância dentro das fotos compatíveis
-    const scored = pool.map((img) => {
-      let score = 100;
-      const tags = (img.tags || []).map((t) => t.toLowerCase());
-
-      // Relevância de Subtipo
-      if (sessionSubtype) {
-        const subLower = sessionSubtype.toLowerCase();
-        if (subLower.includes("infantil") && (tags.includes("infantil") || img.peopleCount === 1)) {
-          score += 50;
-        }
-        if (subLower.includes("smash") && (img.hasCake || tags.some((t) => t.includes("bolo") || t.includes("smash")))) {
-          score += 60;
-        }
-        if (subLower.includes("15 anos") && (img.hasAgeNumber || tags.some((t) => t.includes("15") || t.includes("debutante") || t.includes("gala")))) {
-          score += 60;
-        }
-        if (subLower.includes("praia") && (img.ambiance === "natureza" || img.ambiance === "externo" || tags.some((t) => t.includes("praia")))) {
-          score += 50;
-        }
-        if (subLower.includes("igreja") && (img.ambiance === "interno" || tags.some((t) => t.includes("igreja") || t.includes("altar")))) {
-          score += 50;
-        }
-        if (subLower.includes("civil") && (img.ambiance === "estudio" || tags.some((t) => t.includes("civil") || t.includes("cartorio")))) {
-          score += 50;
-        }
-      }
-
-      // Relevância de bolo / velinhas / números
-      if (categoryAnswers["mostrar_idade"] === true && img.hasAgeNumber) {
-        score += 30;
-      }
-
-      // Relevância de Fundo / Ambiente
-      const fundoAnswer = categoryAnswers["fundo"];
-      if (fundoAnswer === "Fundo liso" && img.ambiance === "estudio") {
-        score += 20;
-      } else if (fundoAnswer === "Cenário elaborado" && (img.ambiance === "decorado" || img.ambiance === "interno")) {
-        score += 20;
-      }
-
-      return { img, score };
-    });
-
-    scored.sort((a, b) => b.score - a.score || a.img.position - b.img.position);
-    return scored.map((s) => s.img);
   }
 
   // ─── Estado derivado ─────────────────────────────────────────────────────────

@@ -37,6 +37,7 @@ Sua tarefa é analisar a imagem de referência fotográfica enviada e extrair me
 REGRAS DE CLASSIFICAÇÃO:
 1. "session_types": Lista com um ou mais tipos de ensaio adequados para esta foto. Escolha APENAS entre:
    - "aniversario" (se houver balões, números, bolo, taça, clima de comemoração de aniversário)
+   - "infantil" (crianças, bebês, mesversário, smash the cake, newborn, brinquedos, ensaio infantil)
    - "estudio" (fundo neutro/infinito, iluminação de estúdio, poses clássicas)
    - "casal" (duas pessoas em clima romântico/cumplicidade)
    - "casamento" (noiva, vestido branco longo, terno, véu, altar, buquê)
@@ -101,7 +102,7 @@ function cleanAndParseJson(text: string): ImageAiClassification {
   const parsed = JSON.parse(cleaned);
 
   const validSessionTypes = [
-    "aniversario", "estudio", "casal", "casamento", "evento",
+    "aniversario", "infantil", "estudio", "casal", "casamento", "evento",
     "gestante", "corporativo", "religioso", "sensual", "outro"
   ];
   const validGenders = ["feminino", "masculino", "misto"];

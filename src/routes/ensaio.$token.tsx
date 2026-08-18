@@ -14,12 +14,15 @@ import {
   Sparkles,
   Trash2,
   UploadCloud,
+  Smile,
+  Shirt,
+  MapPin,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { BrandLogo } from "@/components/ensaio/brand-logo";
-import { ImagePreviewModal, OptionList, StudioTip } from "@/components/ensaio/choice-cards";
+import { ImagePreviewModal, OptionList, ReferencePhotoPicker, StudioTip } from "@/components/ensaio/choice-cards";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,11 +30,13 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  BIRTHDAY_SUBTYPES,
   CATEGORY_QUESTIONS,
+  EXPRESSION_OPTIONS,
   FRAMING_OPTIONS,
   MAKEUP_OPTIONS,
   OUTFIT_MODES,
+  SCENARIO_MODES,
+  SESSION_SUBTYPES_MAP,
   SESSION_TYPES,
 } from "@/lib/ensaio-options";
 import type {
@@ -71,12 +76,15 @@ export const Route = createFileRoute("/ensaio/$token")({
 type StepId =
   | "boas-vindas"
   | "tipo"
+  | "subtipo"
   | "categoria"
   | "maquiagem"
   | "galeria"
   | "enquadramento"
   | "roupa"
+  | "cenario"
   | "cabelo"
+  | "expressao"
   | "observacoes"
   | "resumo";
 
@@ -100,6 +108,8 @@ function EnsaioPage() {
   const config = draft ?? query.data?.config ?? null;
   const picked = selections ?? query.data?.selections ?? {};
   const catalog = query.data?.catalog ?? [];
+  const order = query.data?.order;
+  const isSinglePhotoPackage = (order?.photoCount ?? 1) === 1;
 
   const save = useMutation({
     mutationFn: (payload: {
@@ -129,22 +139,28 @@ function EnsaioPage() {
     onError: (error: Error) => toast.error(error.message),
   });
 
+  // Lista dinâmica de passos: tipo -> subtipo (dedicado) -> categoria -> maquiagem -> galeria...
   const steps = useMemo<StepId[]>(() => {
     const base: StepId[] = ["boas-vindas", "tipo"];
+
+    // Se o tipo de ensaio escolhido tiver subtipos cadastrados, adiciona o passo dedicado de subtipo
+    if (config?.session_type && (SESSION_SUBTYPES_MAP[config.session_type] ?? []).length > 0) {
+      base.push("subtipo");
+    }
+
     if ((CATEGORY_QUESTIONS[config?.session_type ?? ""] ?? []).length > 0) {
       base.push("categoria");
     }
-    base.push(
-      "maquiagem",
-      "galeria",
-      "enquadramento",
-      "roupa",
-      "cabelo",
-      "observacoes",
-      "resumo",
-    );
+    base.push("maquiagem", "galeria", "enquadramento", "roupa");
+
+    // Etapa de cenário para pacotes com mais de 1 foto
+    if (!isSinglePhotoPackage) {
+      base.push("cenario");
+    }
+
+    base.push("cabelo", "expressao", "observacoes", "resumo");
     return base;
-  }, [config?.session_type]);
+  }, [config?.session_type, isSinglePhotoPackage]);
 
   const [hasRestoredStep, setHasRestoredStep] = useState(false);
   useEffect(() => {
@@ -179,12 +195,12 @@ function EnsaioPage() {
       setTimeout(() => {
         setStepIndex((idx) => {
           const next = Math.min(steps.length - 1, idx + 1);
+          patchConfig({ current_step: next });
           window.scrollTo({ top: 0, behavior: "smooth" });
           return next;
         });
       }, 700);
     }
-    // Reset flag when leaving gallery step
     if (currentStep !== "galeria") {
       setGalleryAutoAdvanced(false);
     }
@@ -237,7 +253,7 @@ function EnsaioPage() {
     );
   }
 
-  if (query.error || !query.data || !config) {
+  if (query.error || !query.data || !config || !order) {
     const isNotFound =
       query.error instanceof Error &&
       (query.error.message.includes("inválido") || query.error.message.includes("não encontrado"));
@@ -265,7 +281,7 @@ function EnsaioPage() {
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
 
-  function autoAdvance(delayMs = 280) {
+  function autoAdvance(delayMs = 300) {
     setTimeout(() => {
       setStepIndex((currentIdx) => {
         const next = Math.min(steps.length - 1, currentIdx + 1);
@@ -276,7 +292,6 @@ function EnsaioPage() {
     }, delayMs);
   }
 
-  const order = query.data.order;
   const step = steps[stepIndex] ?? "boas-vindas";
 
   function patchConfig(patch: Partial<OrderConfigData>) {
@@ -348,110 +363,114 @@ function EnsaioPage() {
     toast.info("Referência removida.");
   }
 
-  /** Filtra e ordena as imagens de referência com base nas respostas do cliente. */
+  /**
+   * Filtragem ESTRITA e inteligente das fotos de referência:
+   * Garante que apenas fotos do nicho selecionado apareçam (ex: Casamento mostra apenas Casamento).
+   */
   function getFilteredImages(): CatalogItemPublic[] {
     const sessionType = config?.session_type ?? null;
     const sessionSubtype = config?.session_subtype ?? null;
     const categoryAnswers = config?.category_answers ?? {};
 
-    // 1. Determina quantidade de pessoas esperada
-    let targetPeopleCount: number | null = null;
-    if (typeof categoryAnswers["pessoas"] === "number") {
-      targetPeopleCount = categoryAnswers["pessoas"];
-    } else if (sessionSubtype === "Meu aniversário" || sessionSubtype === "Aniversário infantil") {
-      targetPeopleCount = 1;
-    } else if (sessionSubtype === "Aniversário casal" || sessionType === "casal") {
-      targetPeopleCount = 2;
-    } else if (sessionSubtype === "Aniversário empresarial") {
-      targetPeopleCount = 3;
-    }
+    if (!sessionType) return catalog;
 
-    // 2. Preferências de ambiente e elementos
-    const fundoAnswer = categoryAnswers["fundo"];
-    const ambienteAnswer = categoryAnswers["ambiente"];
-    const showAgeAnswer = categoryAnswers["mostrar_idade"];
+    // 1. Filtragem estrita por tipo de ensaio
+    const strictMatches = catalog.filter((img) => {
+      const types = (img.sessionTypes || []).map((t) => t.toLowerCase());
+      const tags = (img.tags || []).map((t) => t.toLowerCase());
 
-    // 3. Filtro preliminar por tipo de ensaio
-    let candidates = [...catalog];
-    if (sessionType) {
-      const matchType = candidates.filter(
-        (img) => img.sessionTypes.length === 0 || img.sessionTypes.includes(sessionType),
-      );
-      if (matchType.length >= 2) {
-        candidates = matchType;
+      // Match direto no array de session_types
+      if (types.includes(sessionType.toLowerCase())) return true;
+
+      // Correspondências contextuais e sinônimos
+      if (sessionType === "infantil") {
+        if (types.includes("infantil") || tags.includes("infantil") || tags.includes("bebê") || tags.includes("crianca") || tags.includes("criança")) return true;
+        if (types.includes("aniversario") && tags.includes("infantil")) return true;
       }
+      if (sessionType === "aniversario") {
+        if (types.includes("aniversario") || tags.includes("aniversário") || tags.includes("aniversario") || tags.includes("balões") || tags.includes("bolo")) return true;
+        if (sessionSubtype?.toLowerCase().includes("infantil") && types.includes("infantil")) return true;
+      }
+      if (sessionType === "casamento") {
+        if (types.includes("casamento") || tags.includes("casamento") || tags.includes("noiva") || tags.includes("noivo") || tags.includes("véu")) return true;
+      }
+      if (sessionType === "casal") {
+        if (types.includes("casal") || tags.includes("casal") || tags.includes("namorados") || tags.includes("romance")) return true;
+      }
+      if (sessionType === "gestante") {
+        if (types.includes("gestante") || tags.includes("gestante") || tags.includes("grávida") || tags.includes("gravida") || tags.includes("maternidade")) return true;
+      }
+      if (sessionType === "corporativo") {
+        if (types.includes("corporativo") || tags.includes("corporativo") || tags.includes("profissional") || tags.includes("executivo") || tags.includes("linkedin")) return true;
+      }
+      if (sessionType === "sensual") {
+        if (types.includes("sensual") || tags.includes("sensual") || tags.includes("lingerie") || tags.includes("boudoir")) return true;
+      }
+      if (sessionType === "religioso") {
+        if (types.includes("religioso") || tags.includes("religioso") || tags.includes("batizado") || tags.includes("comunhão") || tags.includes("espiritual")) return true;
+      }
+      if (sessionType === "evento") {
+        if (types.includes("evento") || tags.includes("evento") || tags.includes("natal") || tags.includes("formatura") || tags.includes("festa")) return true;
+      }
+
+      return false;
+    });
+
+    // Se temos fotos correspondentes a esta categoria, usamos ESTRITAMENTE elas!
+    // NUNCA misturar fotos de casamento com corporativo ou sensual.
+    let pool = strictMatches;
+
+    // Se o catálogo do estúdio ainda não tiver fotos cadastradas para este tipo,
+    // usamos apenas as fotos marcadas como 'estudio' neutro como fallback temporário
+    if (pool.length === 0) {
+      pool = catalog.filter((img) => img.sessionTypes.includes("estudio") || img.sessionTypes.length === 0);
     }
 
-    // 4. Sistema de Pontuação de Relevância
-    const scored = candidates.map((img) => {
-      let score = 10;
+    // 2. Pontuação e ordenação de relevância dentro das fotos compatíveis
+    const scored = pool.map((img) => {
+      let score = 100;
+      const tags = (img.tags || []).map((t) => t.toLowerCase());
 
-      // Correspondência estrita de tipo de ensaio
-      if (sessionType && img.sessionTypes.includes(sessionType)) {
+      // Relevância de Subtipo
+      if (sessionSubtype) {
+        const subLower = sessionSubtype.toLowerCase();
+        if (subLower.includes("infantil") && (tags.includes("infantil") || img.peopleCount === 1)) {
+          score += 50;
+        }
+        if (subLower.includes("smash") && (img.hasCake || tags.some((t) => t.includes("bolo") || t.includes("smash")))) {
+          score += 60;
+        }
+        if (subLower.includes("15 anos") && (img.hasAgeNumber || tags.some((t) => t.includes("15") || t.includes("debutante") || t.includes("gala")))) {
+          score += 60;
+        }
+        if (subLower.includes("praia") && (img.ambiance === "natureza" || img.ambiance === "externo" || tags.some((t) => t.includes("praia")))) {
+          score += 50;
+        }
+        if (subLower.includes("igreja") && (img.ambiance === "interno" || tags.some((t) => t.includes("igreja") || t.includes("altar")))) {
+          score += 50;
+        }
+        if (subLower.includes("civil") && (img.ambiance === "estudio" || tags.some((t) => t.includes("civil") || t.includes("cartorio")))) {
+          score += 50;
+        }
+      }
+
+      // Relevância de bolo / velinhas / números
+      if (categoryAnswers["mostrar_idade"] === true && img.hasAgeNumber) {
         score += 30;
       }
 
-      // Correspondência de número de pessoas
-      if (targetPeopleCount !== null && img.peopleCount !== null) {
-        if (targetPeopleCount >= 3 && img.peopleCount >= 3) {
-          score += 25;
-        } else if (img.peopleCount === targetPeopleCount) {
-          score += 25;
-        } else {
-          score -= 15;
-        }
-      }
-
-      // Elementos de Aniversário (Idade / Balões / Velas)
-      if (sessionType === "aniversario") {
-        if (showAgeAnswer === true && img.hasAgeNumber) {
-          score += 20;
-        }
-        if (sessionSubtype === "Aniversário infantil" && img.tags?.includes("infantil")) {
-          score += 25;
-        }
-      }
-
-      // Preferência de Fundo/Ambiente
+      // Relevância de Fundo / Ambiente
+      const fundoAnswer = categoryAnswers["fundo"];
       if (fundoAnswer === "Fundo liso" && img.ambiance === "estudio") {
-        score += 15;
-      } else if (
-        fundoAnswer === "Cenário elaborado" &&
-        (img.ambiance === "decorado" || img.ambiance === "interno")
-      ) {
-        score += 15;
-      }
-
-      if (ambienteAnswer === "Interno" && (img.ambiance === "interno" || img.ambiance === "estudio")) {
-        score += 15;
-      } else if (
-        ambienteAnswer === "Externo" &&
-        (img.ambiance === "externo" || img.ambiance === "natureza")
-      ) {
-        score += 15;
+        score += 20;
+      } else if (fundoAnswer === "Cenário elaborado" && (img.ambiance === "decorado" || img.ambiance === "interno")) {
+        score += 20;
       }
 
       return { img, score };
     });
 
-    // Ordena pelo maior score e depois pela posição definida no estúdio
     scored.sort((a, b) => b.score - a.score || a.img.position - b.img.position);
-
-    // Se tivermos filtro de pessoas bem definido e candidatos suficientes, filtra
-    if (targetPeopleCount !== null) {
-      const exactPeople = scored
-        .filter((s) => {
-          if (s.img.peopleCount === null) return true;
-          if (targetPeopleCount! >= 3) return s.img.peopleCount >= 3;
-          return s.img.peopleCount === targetPeopleCount;
-        })
-        .map((s) => s.img);
-
-      if (exactPeople.length >= 3) {
-        return exactPeople;
-      }
-    }
-
     return scored.map((s) => s.img);
   }
 
@@ -462,7 +481,7 @@ function EnsaioPage() {
   const chosenCatalogRefs = catalog.filter((img) => chosenRefIds.includes(img.id));
   const customRefs = config?.custom_references ?? [];
 
-  // Lista unificada de referências (catálogo + enviadas pelo cliente)
+  // Lista unificada de referências selecionadas pelo cliente
   const allChosenRefs = [
     ...chosenCatalogRefs.map((img) => ({
       id: img.id,
@@ -484,6 +503,8 @@ function EnsaioPage() {
     switch (step) {
       case "tipo":
         return Boolean(config.session_type);
+      case "subtipo":
+        return Boolean(config.session_subtype);
       case "maquiagem":
         return Boolean(config.makeup);
       case "galeria":
@@ -491,9 +512,21 @@ function EnsaioPage() {
       case "enquadramento":
         return Boolean(config.framing);
       case "roupa":
-        return Boolean(config.outfit_mode);
+        if (!config.outfit_mode) return false;
+        if (!isSinglePhotoPackage && config.outfit_mode === "fixa" && allChosenRefs.length > 1) {
+          return Boolean(config.outfit_reference_id);
+        }
+        return true;
+      case "cenario":
+        if (!config.scenario_mode) return false;
+        if (config.scenario_mode === "fixo" && allChosenRefs.length > 1) {
+          return Boolean(config.scenario_reference_id);
+        }
+        return true;
       case "cabelo":
         return Boolean(config.hair);
+      case "expressao":
+        return Boolean(config.expression);
       default:
         return true;
     }
@@ -545,36 +578,36 @@ function EnsaioPage() {
             </h1>
 
             <p className="mt-4 text-base sm:text-lg leading-relaxed text-muted-foreground max-w-lg mx-auto">
-              Seu pacote inclui <strong className="text-foreground font-semibold">{order.photoCount} fotos profissionais</strong>.
+              Seu pacote inclui <strong className="text-foreground font-semibold">{order.photoCount} {order.photoCount === 1 ? "foto profissional" : "fotos profissionais"}</strong>.
               Nas próximas etapas, você vai escolher visualmente como quer que elas fiquem.
             </p>
 
             <div className="mt-8 grid gap-3 text-left sm:grid-cols-3">
-              <div className="rounded-xl border border-border/80 bg-card/60 p-4 shadow-sm">
-                <span className="flex size-8 items-center justify-center rounded-full bg-secondary text-sm font-semibold text-foreground mb-2">
+              <div className="rounded-2xl border border-border/80 bg-card/60 p-4 sm:p-5 shadow-sm">
+                <span className="flex size-9 items-center justify-center rounded-xl bg-amber-500/15 text-sm font-bold text-amber-600 dark:text-amber-400 mb-3">
                   1
                 </span>
-                <p className="font-display text-lg font-light">Escolha visual</p>
+                <p className="font-display text-lg font-light text-foreground">Escolha visual</p>
                 <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                  Basta tocar nas fotos que você mais gostar.
+                  Basta tocar nas fotos e opções que você mais gostar.
                 </p>
               </div>
 
-              <div className="rounded-xl border border-border/80 bg-card/60 p-4 shadow-sm">
-                <span className="flex size-8 items-center justify-center rounded-full bg-secondary text-sm font-semibold text-foreground mb-2">
+              <div className="rounded-2xl border border-border/80 bg-card/60 p-4 sm:p-5 shadow-sm">
+                <span className="flex size-9 items-center justify-center rounded-xl bg-amber-500/15 text-sm font-bold text-amber-600 dark:text-amber-400 mb-3">
                   2
                 </span>
-                <p className="font-display text-lg font-light">Sem complicação</p>
+                <p className="font-display text-lg font-light text-foreground">Sem complicação</p>
                 <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                  Não precisa de termos técnicos, tudo é simples e guiado.
+                  Tudo é simples e guiado passo a passo, do início ao fim.
                 </p>
               </div>
 
-              <div className="rounded-xl border border-border/80 bg-card/60 p-4 shadow-sm">
-                <span className="flex size-8 items-center justify-center rounded-full bg-secondary text-sm font-semibold text-foreground mb-2">
+              <div className="rounded-2xl border border-border/80 bg-card/60 p-4 sm:p-5 shadow-sm">
+                <span className="flex size-9 items-center justify-center rounded-xl bg-amber-500/15 text-sm font-bold text-amber-600 dark:text-amber-400 mb-3">
                   3
                 </span>
-                <p className="font-display text-lg font-light">Sua identidade</p>
+                <p className="font-display text-lg font-light text-foreground">Sua identidade</p>
                 <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
                   Seu rosto virá das fotos que você enviar no WhatsApp.
                 </p>
@@ -588,7 +621,7 @@ function EnsaioPage() {
 
             <Button
               size="lg"
-              className="mt-8 w-full sm:w-auto sm:min-w-64 gap-2 text-base h-12"
+              className="mt-8 w-full sm:w-auto sm:min-w-64 gap-2 text-base h-13 rounded-2xl shadow-editorial font-medium"
               onClick={() => {
                 const next = 1;
                 setStepIndex(next);
@@ -602,38 +635,43 @@ function EnsaioPage() {
           </section>
         ) : null}
 
-        {/* ── Tipo de ensaio ───────────────────────────────────────────────── */}
+        {/* ── Tipo de ensaio (Passo 1) ──────────────────────────────────────── */}
         {step === "tipo" ? (
           <StepShell
             eyebrow="Passo 1"
             title="Que tipo de ensaio você quer?"
-            hint="Toque na opção mais próxima do seu objetivo."
+            hint="Toque no tema principal do seu ensaio."
           >
             <OptionList
               options={SESSION_TYPES.map((type) => ({ ...type }))}
               value={config.session_type}
               onSelect={(value) => {
                 patchConfig({ session_type: value, session_subtype: null, category_answers: {} });
-                if (value !== "aniversario") {
-                  autoAdvance(280);
-                }
+                autoAdvance(300);
               }}
             />
-            {config.session_type === "aniversario" ? (
-              <div className="mt-8 animate-in fade-in-50 duration-300">
-                <p className="eyebrow mb-3">Aniversário de quem?</p>
-                <OptionList
-                  options={BIRTHDAY_SUBTYPES.map((label) => ({ value: label, label }))}
-                  value={config.session_subtype}
-                  onSelect={(value) => {
-                    patchConfig({ session_subtype: value });
-                    autoAdvance(280);
-                  }}
-                />
-              </div>
-            ) : null}
 
-            <StudioTip text="Escolha a categoria principal. Na etapa de referências você verá fotos reais desse tipo de ensaio para escolher." />
+            <StudioTip text="Escolha a categoria principal. No próximo passo você poderá escolher o estilo específico." />
+          </StepShell>
+        ) : null}
+
+        {/* ── Subtipo do ensaio (Passo Dedicado, 1 pergunta por tela) ──────── */}
+        {step === "subtipo" ? (
+          <StepShell
+            eyebrow="Passo 1.2"
+            title={`Qual estilo de ensaio ${SESSION_TYPES.find((t) => t.value === config.session_type)?.label || ""} você quer?`}
+            hint="Toque na opção que melhor descreve o seu ensaio."
+          >
+            <OptionList
+              options={SESSION_SUBTYPES_MAP[config.session_type ?? ""] ?? []}
+              value={config.session_subtype}
+              onSelect={(value) => {
+                patchConfig({ session_subtype: value });
+                autoAdvance(300);
+              }}
+            />
+
+            <StudioTip text="Esta escolha nos ajuda a mostrar exatamente as fotos que têm o estilo, cenário e elementos que você procura." />
           </StepShell>
         ) : null}
 
@@ -655,7 +693,6 @@ function EnsaioPage() {
 
               return (
                 <div className="space-y-8">
-                  {/* Progresso das perguntas */}
                   {choiceQuestions.length > 1 ? (
                     <div className="flex items-center gap-2">
                       {choiceQuestions.map((q, idx) => {
@@ -664,7 +701,7 @@ function EnsaioPage() {
                           <div
                             key={q.key}
                             className={cn(
-                              "h-1 flex-1 rounded-full transition-all duration-500",
+                              "h-1.5 flex-1 rounded-full transition-all duration-500",
                               answered ? "bg-foreground" : idx === answeredChoices.length ? "bg-foreground/30 animate-pulse" : "bg-border/50",
                             )}
                           />
@@ -679,7 +716,6 @@ function EnsaioPage() {
                       const newAnswers = { ...config.category_answers, [question.key]: next };
                       patchConfig({ category_answers: newAnswers });
 
-                      // Auto-advance quando a última pergunta choice é respondida
                       if (question.type === "choice") {
                         const updatedChoicesDone = choiceQuestions.filter(
                           (q) => q.key === question.key ? true : (typeof newAnswers[q.key] === "string" && newAnswers[q.key]),
@@ -707,7 +743,7 @@ function EnsaioPage() {
                       return (
                         <label
                           key={question.key}
-                          className="flex items-center justify-between gap-4 rounded-xl border border-border/80 bg-card/60 p-4"
+                          className="flex items-center justify-between gap-4 rounded-2xl border border-border/80 bg-card/60 p-4 sm:p-5"
                         >
                           <span className="font-display text-xl font-light">{question.label}</span>
                           <Switch checked={value === true} onCheckedChange={update} />
@@ -732,13 +768,12 @@ function EnsaioPage() {
                                 : event.target.value,
                             )
                           }
-                          className="h-12 text-base"
+                          className="h-12 text-base rounded-xl"
                         />
                       </div>
                     );
                   })}
 
-                  {/* CTA manual para quando só há perguntas de texto/número/boolean */}
                   {allChoicesAnswered && choiceQuestions.length === 0 ? (
                     <p className="text-center text-xs text-muted-foreground">Preencha os campos acima e toque em <strong>Continuar</strong> na parte de baixo da tela.</p>
                   ) : null}
@@ -746,7 +781,7 @@ function EnsaioPage() {
               );
             })()}
 
-            <StudioTip text="Suas respostas ajudam a filtrar apenas fotos compatíveis com o seu ensaio. Quanto mais você preencher, melhores serão as sugestões!" />
+            <StudioTip text="Suas respostas ajudam a filtrar apenas fotos compatíveis com o seu ensaio." />
           </StepShell>
         ) : null}
 
@@ -762,7 +797,7 @@ function EnsaioPage() {
               value={config.makeup}
               onSelect={(value) => {
                 patchConfig({ makeup: value });
-                autoAdvance(280);
+                autoAdvance(300);
               }}
             />
 
@@ -770,18 +805,18 @@ function EnsaioPage() {
           </StepShell>
         ) : null}
 
-        {/* ── Galeria de referências ───────────────────────────────────────── */}
+        {/* ── Galeria de referências (Filtragem Estrita por Nicho) ─────────── */}
         {step === "galeria" ? (
           <StepShell
             eyebrow="Passo 4"
             title="Escolha as fotos que você mais amar"
-            hint={`Selecione ou envie até ${order.photoCount} ${order.photoCount === 1 ? "foto de referência" : "fotos de referência"} para o seu ensaio.`}
+            hint={`Mostrando fotos de ${SESSION_TYPES.find((t) => t.value === config.session_type)?.label || "ensaio"}. Selecione ou envie até ${order.photoCount} ${order.photoCount === 1 ? "foto de referência" : "fotos de referência"}.`}
           >
             {/* Card de Progresso da Seleção */}
-            <div className="mb-6 rounded-xl border border-border/80 bg-card/80 p-4 shadow-sm">
+            <div className="mb-6 rounded-2xl border border-border/80 bg-card/80 p-4 sm:p-5 shadow-sm">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="flex size-7 items-center justify-center rounded-full bg-foreground text-xs font-medium text-background">
+                  <span className="flex size-7 items-center justify-center rounded-full bg-foreground text-xs font-semibold text-background">
                     {totalSelectedCount}
                   </span>
                   <p className="text-sm font-medium text-foreground">
@@ -799,7 +834,7 @@ function EnsaioPage() {
                 </p>
               </div>
 
-              <div className="mt-3 h-1.5 w-full rounded-full bg-border/60 overflow-hidden">
+              <div className="mt-3 h-2 w-full rounded-full bg-border/60 overflow-hidden">
                 <div
                   className="h-full bg-foreground transition-all duration-500 ease-out rounded-full"
                   style={{
@@ -810,10 +845,10 @@ function EnsaioPage() {
             </div>
 
             {/* ── Card de Upload de Foto Própria do Cliente ─────────────────── */}
-            <div className="mb-6 rounded-xl border-2 border-dashed border-border/90 bg-card/60 p-4 transition-all hover:border-foreground/40 hover:bg-card">
+            <div className="mb-6 rounded-2xl border-2 border-dashed border-border/90 bg-card/60 p-4 sm:p-5 transition-all hover:border-foreground/40 hover:bg-card">
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="flex items-center gap-3 text-left">
-                  <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                <div className="flex items-center gap-3.5 text-left">
+                  <div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400">
                     <UploadCloud className="size-6" />
                   </div>
                   <div>
@@ -857,7 +892,7 @@ function EnsaioPage() {
                   {customRefs.map((customImg, idx) => (
                     <div
                       key={customImg.id}
-                      className="group relative aspect-[3/4] overflow-hidden rounded-xl border-2 border-foreground ring-2 ring-foreground/80 ring-offset-2 ring-offset-background shadow-editorial bg-card"
+                      className="group relative aspect-[3/4] overflow-hidden rounded-2xl border-2 border-foreground ring-2 ring-foreground/80 ring-offset-2 ring-offset-background shadow-editorial bg-card"
                     >
                       <img
                         src={customImg.imageUrl}
@@ -865,12 +900,10 @@ function EnsaioPage() {
                         className="size-full object-cover"
                       />
 
-                      {/* Selo de Referência Própria */}
                       <div className="absolute left-2 top-2 rounded-md bg-amber-500 px-2 py-0.5 text-[0.65rem] font-bold text-white shadow-md">
                         ✨ Sua Foto #{idx + 1}
                       </div>
 
-                      {/* Botão de Zoom */}
                       <button
                         type="button"
                         onClick={() => setPreviewImage(customImg.imageUrl)}
@@ -880,7 +913,6 @@ function EnsaioPage() {
                         <Maximize2 className="size-3.5" />
                       </button>
 
-                      {/* Botão de Excluir Referência Própria */}
                       <button
                         type="button"
                         onClick={() => removeCustomReference(customImg.id)}
@@ -895,15 +927,15 @@ function EnsaioPage() {
               </div>
             )}
 
-            {/* ── Galeria de Referências do Catálogo ──────────────────────── */}
+            {/* ── Galeria de Referências do Catálogo (Filtradas) ──────────── */}
             {filteredImages.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border p-12 text-center">
+              <div className="rounded-2xl border border-dashed border-border p-12 text-center">
                 <ImageIcon className="mx-auto mb-4 size-8 text-muted-foreground" />
                 <p className="font-display text-xl font-light">
-                  Nenhuma referência disponível no momento
+                  Nenhuma referência encontrada para esta categoria
                 </p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Você pode avançar ou anexar suas próprias fotos acima.
+                <p className="mt-2 text-sm text-muted-foreground max-w-md mx-auto">
+                  Você pode anexar suas próprias fotos no botão acima para usar no ensaio.
                 </p>
               </div>
             ) : (
@@ -917,13 +949,12 @@ function EnsaioPage() {
                       <div
                         key={img.id}
                         className={cn(
-                          "group relative overflow-hidden rounded-xl aspect-[3/4] border transition-all duration-300 select-none",
+                          "group relative overflow-hidden rounded-2xl aspect-[3/4] border transition-all duration-300 select-none",
                           isSelected
                             ? "border-foreground ring-2 ring-foreground/90 ring-offset-2 ring-offset-background scale-[1.02] shadow-editorial"
                             : "border-border/80 bg-card/60 opacity-85 hover:opacity-100 hover:border-foreground/40 hover:shadow-sm",
                         )}
                       >
-                        {/* Clique principal na foto para alternar seleção */}
                         <button
                           type="button"
                           onClick={() => toggleRef(img.id)}
@@ -943,7 +974,6 @@ function EnsaioPage() {
                           )}
                         </button>
 
-                        {/* Botão de Zoom / Ver em tamanho real */}
                         {img.imageUrl ? (
                           <button
                             type="button"
@@ -958,7 +988,6 @@ function EnsaioPage() {
                           </button>
                         ) : null}
 
-                        {/* Badge de Seleção com Número */}
                         <button
                           type="button"
                           onClick={() => toggleRef(img.id)}
@@ -985,7 +1014,7 @@ function EnsaioPage() {
                       variant="outline"
                       size="sm"
                       onClick={() => setGalleryLimit((prev) => prev + 30)}
-                      className="gap-2 border-border/80 text-xs"
+                      className="gap-2 border-border/80 text-xs rounded-xl"
                     >
                       <Plus className="size-3.5" />
                       Ver mais opções (+{filteredImages.length - galleryLimit} fotos)
@@ -995,9 +1024,8 @@ function EnsaioPage() {
               </>
             )}
 
-            {/* Auto-avança quando todas as fotos são selecionadas */}
             {totalSelectedCount >= order.photoCount && totalSelectedCount > 0 ? (
-              <div className="mt-6 flex items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/8 p-4 animate-in fade-in-50 duration-300">
+              <div className="mt-6 flex items-center gap-3 rounded-2xl border border-emerald-500/30 bg-emerald-500/8 p-4 animate-in fade-in-50 duration-300">
                 <CheckCircle2 className="size-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
                 <p className="text-sm text-emerald-800 dark:text-emerald-300 font-medium">
                   Perfeito! Suas {order.photoCount} {order.photoCount === 1 ? "foto foi selecionada" : "fotos foram selecionadas"}. Avançando...
@@ -1024,7 +1052,7 @@ function EnsaioPage() {
               value={config.framing}
               onSelect={(value) => {
                 patchConfig({ framing: value });
-                autoAdvance(280);
+                autoAdvance(300);
               }}
             />
 
@@ -1032,85 +1060,159 @@ function EnsaioPage() {
           </StepShell>
         ) : null}
 
-        {/* ── Roupa ────────────────────────────────────────────────────────── */}
+        {/* ── Roupa (Com seleção visual na foto de referência) ─────────────── */}
         {step === "roupa" ? (
           <StepShell
             eyebrow="Passo 6"
             title="Sobre a roupa do ensaio:"
-            hint="Você pode manter o mesmo estilo ou variar entre as fotos."
+            hint="Você pode manter o mesmo estilo de roupa em todas as fotos ou variar entre elas."
           >
             <OptionList
               options={OUTFIT_MODES}
               value={config.outfit_mode}
               onSelect={(value) => {
                 patchConfig({ outfit_mode: value });
-                autoAdvance(280);
+                if (isSinglePhotoPackage || allChosenRefs.length <= 1) {
+                  if (allChosenRefs[0]) {
+                    patchConfig({ outfit_mode: value, outfit_reference_id: allChosenRefs[0].id });
+                  }
+                  autoAdvance(300);
+                } else if (value === "fixa" && !config.outfit_reference_id && allChosenRefs.length > 0) {
+                  // Abre a seleção visual
+                } else if (value === "variar") {
+                  autoAdvance(350);
+                }
               }}
             />
 
+            {/* Sub-escolha visual: Se escolheu 'Uma roupa só' e tem várias referências */}
+            {!isSinglePhotoPackage && config.outfit_mode === "fixa" && allChosenRefs.length > 1 ? (
+              <div className="mt-8 pt-6 border-t border-border/80 animate-in fade-in-50 duration-300">
+                <div className="mb-4 flex items-center gap-2">
+                  <span className="flex size-7 items-center justify-center rounded-xl bg-amber-500/15 text-sm">
+                    👗
+                  </span>
+                  <div>
+                    <p className="eyebrow text-foreground/90 font-medium">Qual look usar em todas as fotos?</p>
+                    <p className="text-xs text-muted-foreground">Toque na foto que tem a roupa que você quer copiar:</p>
+                  </div>
+                </div>
+
+                <ReferencePhotoPicker
+                  references={allChosenRefs}
+                  selectedId={config.outfit_reference_id}
+                  badgeText="Usar este look"
+                  onPreview={(url) => setPreviewImage(url)}
+                  onSelect={(id) => {
+                    patchConfig({ outfit_reference_id: id });
+                    autoAdvance(350);
+                  }}
+                />
+              </div>
+            ) : null}
+
+            {/* Sub-escolha: Se escolheu 'Variar a roupa' */}
+            {!isSinglePhotoPackage && config.outfit_mode === "variar" && allChosenRefs.length > 1 ? (
+              <div className="mt-6 rounded-2xl border border-border/70 bg-card/50 p-4">
+                <p className="text-xs text-muted-foreground leading-relaxed flex items-center gap-2">
+                  <Shirt className="size-4 text-amber-500 shrink-0" />
+                  <span>
+                    A IA vai alternar e variar os looks das <strong>{allChosenRefs.length} fotos de referência</strong> que você escolheu no passo anterior.
+                  </span>
+                </p>
+              </div>
+            ) : null}
+
             <StudioTip text="Se as referências que você escolheu têm estilos e cores de roupas diferentes, a opção 'Variar a roupa' garante maior diversidade no resultado final." />
+          </StepShell>
+        ) : null}
+
+        {/* ── Cenário / Ambiente (Com seleção visual na foto) ──────────────── */}
+        {step === "cenario" ? (
+          <StepShell
+            eyebrow="Passo 7"
+            title="Sobre o cenário do ensaio:"
+            hint="Você quer manter o mesmo cenário e decoração em todas as fotos ou variar os ambientes?"
+          >
+            <OptionList
+              options={SCENARIO_MODES}
+              value={config.scenario_mode ?? null}
+              onSelect={(value) => {
+                patchConfig({ scenario_mode: value });
+                if (allChosenRefs.length <= 1) {
+                  if (allChosenRefs[0]) {
+                    patchConfig({ scenario_mode: value, scenario_reference_id: allChosenRefs[0].id });
+                  }
+                  autoAdvance(300);
+                } else if (value === "fixo" && !config.scenario_reference_id && allChosenRefs.length > 0) {
+                  // Abre a seleção visual
+                } else if (value === "variar") {
+                  autoAdvance(350);
+                }
+              }}
+            />
+
+            {/* Sub-escolha visual: Se escolheu 'Um cenário só' e tem várias referências */}
+            {config.scenario_mode === "fixo" && allChosenRefs.length > 1 ? (
+              <div className="mt-8 pt-6 border-t border-border/80 animate-in fade-in-50 duration-300">
+                <div className="mb-4 flex items-center gap-2">
+                  <span className="flex size-7 items-center justify-center rounded-xl bg-amber-500/15 text-sm">
+                    🏛️
+                  </span>
+                  <div>
+                    <p className="eyebrow text-foreground/90 font-medium">Qual cenário usar em todas as fotos?</p>
+                    <p className="text-xs text-muted-foreground">Toque na foto que tem o cenário/ambiente que você mais gostou:</p>
+                  </div>
+                </div>
+
+                <ReferencePhotoPicker
+                  references={allChosenRefs}
+                  selectedId={config.scenario_reference_id}
+                  badgeText="Usar este cenário"
+                  onPreview={(url) => setPreviewImage(url)}
+                  onSelect={(id) => {
+                    patchConfig({ scenario_reference_id: id });
+                    autoAdvance(350);
+                  }}
+                />
+              </div>
+            ) : null}
+
+            {/* Sub-escolha: Se escolheu 'Variar o cenário' */}
+            {config.scenario_mode === "variar" && allChosenRefs.length > 1 ? (
+              <div className="mt-6 rounded-2xl border border-border/70 bg-card/50 p-4">
+                <p className="text-xs text-muted-foreground leading-relaxed flex items-center gap-2">
+                  <MapPin className="size-4 text-amber-500 shrink-0" />
+                  <span>
+                    A IA vai alternar os cenários e ambientes das <strong>{allChosenRefs.length} fotos de referência</strong> que você escolheu.
+                  </span>
+                </p>
+              </div>
+            ) : null}
+
+            <StudioTip text="Você pode focar em um ambiente único e marcante ou ter fotos em cenários variados para enriquecer seu álbum." />
           </StepShell>
         ) : null}
 
         {/* ── Cabelo ───────────────────────────────────────────────────────── */}
         {step === "cabelo" ? (
           <StepShell
-            eyebrow="Passo 7"
+            eyebrow="Passo 8"
             title="Como você quer o cabelo?"
             hint="Toque na foto que tem o cabelo que você quer copiar, ou selecione a opção abaixo para manter o seu cabelo natural."
           >
             {allChosenRefs.length > 0 ? (
-              <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3">
-                {allChosenRefs.map((img, idx) => {
-                  const isSelected = config.hair === img.id;
-                  return (
-                    <button
-                      key={img.id}
-                      type="button"
-                      onClick={() => {
-                        patchConfig({ hair: img.id });
-                        autoAdvance(280);
-                      }}
-                      className={cn(
-                        "group relative overflow-hidden rounded-xl aspect-[3/4] border transition-all duration-300 text-left",
-                        isSelected
-                          ? "border-foreground ring-2 ring-foreground/90 ring-offset-2 ring-offset-background scale-[1.02] shadow-editorial"
-                          : "border-border/80 bg-card/60 opacity-80 hover:opacity-100 hover:border-foreground/40",
-                      )}
-                    >
-                      {img.imageUrl ? (
-                        <img
-                          src={img.imageUrl}
-                          alt={`Referência ${idx + 1}`}
-                          loading="lazy"
-                          className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
-                        />
-                      ) : (
-                        <div className="flex size-full items-center justify-center bg-muted">
-                          <ImageIcon className="size-6 text-muted-foreground" />
-                        </div>
-                      )}
-                      <div
-                        className={cn(
-                          "absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-3 text-white transition-opacity",
-                          isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100",
-                        )}
-                      >
-                        <p className="text-xs font-medium flex items-center gap-1.5">
-                          {isSelected ? (
-                            <>
-                              <Check className="size-3.5 text-emerald-400" /> Copiar este cabelo
-                            </>
-                          ) : img.isCustom ? (
-                            `Copiar da sua foto #${idx + 1}`
-                          ) : (
-                            `Copiar foto #${idx + 1}`
-                          )}
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })}
+              <div className="space-y-4">
+                <ReferencePhotoPicker
+                  references={allChosenRefs}
+                  selectedId={config.hair}
+                  badgeText="Copiar este cabelo"
+                  onPreview={(url) => setPreviewImage(url)}
+                  onSelect={(id) => {
+                    patchConfig({ hair: id });
+                    autoAdvance(300);
+                  }}
+                />
               </div>
             ) : null}
 
@@ -1118,15 +1220,18 @@ function EnsaioPage() {
               type="button"
               onClick={() => {
                 patchConfig({ hair: "manter" });
-                autoAdvance(280);
+                autoAdvance(300);
               }}
               className={cn(
-                "mt-4 flex w-full items-start gap-4 rounded-xl border p-4 sm:p-5 text-left transition-all duration-300",
+                "mt-4 flex w-full items-start gap-4 rounded-2xl border p-4 sm:p-5 text-left transition-all duration-300",
                 config.hair === "manter"
-                  ? "border-foreground bg-secondary/80 shadow-editorial ring-1 ring-foreground/20"
+                  ? "border-foreground bg-secondary/90 shadow-editorial ring-1 ring-foreground/20"
                   : "border-border/80 bg-card/60 hover:border-foreground/40 hover:bg-card",
               )}
             >
+              <div className="flex size-11 sm:size-12 shrink-0 items-center justify-center rounded-xl border border-border/60 bg-secondary/50 text-xl sm:text-2xl">
+                ✨
+              </div>
               <span className="flex-1">
                 <span className="block font-display text-xl sm:text-2xl font-light">
                   Manter meu cabelo natural
@@ -1146,23 +1251,42 @@ function EnsaioPage() {
           </StepShell>
         ) : null}
 
+        {/* ── Expressão & Sorriso ──────────────────────────────────────────── */}
+        {step === "expressao" ? (
+          <StepShell
+            eyebrow="Passo 9"
+            title="Qual expressão você prefere nas fotos?"
+            hint="Escolha como você quer seu semblante e sorriso no ensaio."
+          >
+            <OptionList
+              options={EXPRESSION_OPTIONS}
+              value={config.expression ?? null}
+              onSelect={(value) => {
+                patchConfig({ expression: value });
+                autoAdvance(300);
+              }}
+            />
+
+            <StudioTip text="O sorriso suave e o sorriso mostrando dentes trazem calor e alegria, enquanto a expressão séria confere autoridade e sofisticação." />
+          </StepShell>
+        ) : null}
+
         {/* ── Observações ──────────────────────────────────────────────────── */}
         {step === "observacoes" ? (
           <StepShell
-            eyebrow="Passo 8"
+            eyebrow="Passo 10"
             title="Quer nos contar mais alguma coisa?"
             hint="Campo opcional — se não tiver nada a dizer, basta tocar em Continuar abaixo."
           >
             <Textarea
               id="notes"
               rows={5}
-              placeholder="Ex: prefiro tons mais escuros; tenho tatuagem no braço que quero mostrar; gostaria de fotos mais sorridentes..."
+              placeholder="Ex: prefiro tons mais escuros; tenho tatuagem no braço que quero mostrar; gostaria de destacar meus acessórios..."
               value={config.special_notes}
               onChange={(event) => patchConfig({ special_notes: event.target.value })}
-              className="text-base p-4"
+              className="text-base p-4 rounded-2xl"
             />
 
-            {/* CTA explícita para avançar */}
             <button
               type="button"
               onClick={() => {
@@ -1171,7 +1295,7 @@ function EnsaioPage() {
                 patchConfig({ current_step: next });
                 window.scrollTo({ top: 0, behavior: "smooth" });
               }}
-              className="mt-5 flex w-full items-center justify-center gap-3 rounded-xl border-2 border-foreground/70 bg-foreground text-background py-4 text-base font-semibold shadow-editorial transition-all hover:bg-foreground/90 active:scale-[0.98]"
+              className="mt-6 flex w-full items-center justify-center gap-3 rounded-2xl bg-foreground text-background py-4 text-base font-semibold shadow-editorial transition-all hover:bg-foreground/90 active:scale-[0.98]"
             >
               Continuar para a revisão
               <ArrowRight className="size-5" />
@@ -1197,7 +1321,7 @@ function EnsaioPage() {
           >
             {/* Galeria das fotos de referência escolhidas */}
             {allChosenRefs.length > 0 ? (
-              <div className="mb-6 rounded-xl border border-border/80 bg-card/60 p-4 sm:p-5">
+              <div className="mb-6 rounded-2xl border border-border/80 bg-card/60 p-4 sm:p-5">
                 <div className="mb-3.5 flex items-center justify-between">
                   <p className="eyebrow text-foreground/80 font-medium">
                     {allChosenRefs.length} {allChosenRefs.length === 1 ? "Referência Escolhida" : "Referências Escolhidas"}
@@ -1217,7 +1341,7 @@ function EnsaioPage() {
                   {allChosenRefs.map((img, idx) => (
                     <div
                       key={img.id}
-                      className="group relative aspect-[3/4] overflow-hidden rounded-lg border border-border/80 bg-muted"
+                      className="group relative aspect-[3/4] overflow-hidden rounded-xl border border-border/80 bg-muted"
                     >
                       {img.imageUrl ? (
                         <img
@@ -1245,7 +1369,7 @@ function EnsaioPage() {
             ) : null}
 
             {/* Resumo das Diretrizes */}
-            <dl className="divide-y divide-border/70 rounded-xl border border-border/80 bg-card/60">
+            <dl className="divide-y divide-border/70 rounded-2xl border border-border/80 bg-card/60">
               {(
                 [
                   {
@@ -1253,6 +1377,15 @@ function EnsaioPage() {
                     value: SESSION_TYPES.find((t) => t.value === config.session_type)?.label,
                     stepId: "tipo" as StepId,
                   },
+                  ...(config.session_subtype
+                    ? [
+                        {
+                          label: "Estilo / Subtipo",
+                          value: config.session_subtype,
+                          stepId: "subtipo" as StepId,
+                        },
+                      ]
+                    : []),
                   {
                     label: "Maquiagem",
                     value: MAKEUP_OPTIONS.find((m) => m.value === config.makeup)?.label,
@@ -1265,18 +1398,42 @@ function EnsaioPage() {
                   },
                   {
                     label: "Roupa",
-                    value: OUTFIT_MODES.find((o) => o.value === config.outfit_mode)?.label,
+                    value:
+                      config.outfit_mode === "fixa"
+                        ? config.outfit_reference_id
+                          ? `Look único (Foto #${allChosenRefs.findIndex((r) => r.id === config.outfit_reference_id) + 1 || 1})`
+                          : "Look único em todas as fotos"
+                        : "Variar look entre as fotos",
                     stepId: "roupa" as StepId,
                   },
+                  ...(!isSinglePhotoPackage
+                    ? [
+                        {
+                          label: "Cenário",
+                          value:
+                            config.scenario_mode === "fixo"
+                              ? config.scenario_reference_id
+                                ? `Cenário único (Foto #${allChosenRefs.findIndex((r) => r.id === config.scenario_reference_id) + 1 || 1})`
+                                : "Cenário único em todas as fotos"
+                              : "Variar cenários entre as fotos",
+                          stepId: "cenario" as StepId,
+                        },
+                      ]
+                    : []),
                   {
                     label: "Cabelo",
                     value:
                       config.hair === "manter"
-                        ? "Manter meu cabelo natural"
+                        ? "Manter cabelo natural das minhas fotos"
                         : config.hair
-                          ? `Copiar foto #${(allChosenRefs.findIndex((r) => r.id === config.hair) + 1) || "de referência"}`
+                          ? `Copiar foto #${allChosenRefs.findIndex((r) => r.id === config.hair) + 1 || "de referência"}`
                           : undefined,
                     stepId: "cabelo" as StepId,
+                  },
+                  {
+                    label: "Expressão",
+                    value: EXPRESSION_OPTIONS.find((e) => e.value === config.expression)?.label,
+                    stepId: "expressao" as StepId,
                   },
                   {
                     label: "Observações",
@@ -1321,7 +1478,7 @@ function EnsaioPage() {
             {!config.confirmed ? (
               <div className="mt-8 space-y-3">
                 <Button
-                  className="w-full gap-2.5 h-14 text-base font-medium shadow-editorial bg-emerald-600 hover:bg-emerald-700 text-white dark:bg-emerald-600 dark:hover:bg-emerald-700"
+                  className="w-full gap-2.5 h-14 text-base font-medium shadow-editorial bg-emerald-600 hover:bg-emerald-700 text-white dark:bg-emerald-600 dark:hover:bg-emerald-700 rounded-2xl"
                   size="lg"
                   disabled={confirm.isPending}
                   onClick={() => confirm.mutate()}
@@ -1335,7 +1492,7 @@ function EnsaioPage() {
               </div>
             ) : (
               <div className="mt-8 space-y-4">
-                <div className="flex items-start gap-3.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-5">
+                <div className="flex items-start gap-3.5 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5">
                   <CheckCircle2 className="size-6 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
                   <div className="space-y-1">
                     <p className="font-medium text-emerald-900 dark:text-emerald-200">
@@ -1347,7 +1504,7 @@ function EnsaioPage() {
                   </div>
                 </div>
 
-                <Button asChild size="lg" className="w-full h-14 text-base gap-2 bg-emerald-600 hover:bg-emerald-700 text-white">
+                <Button asChild size="lg" className="w-full h-14 text-base gap-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl">
                   <a
                     href={whatsappLink(
                       getActiveStudioWhatsApp(),
@@ -1371,7 +1528,6 @@ function EnsaioPage() {
 
       {/* ── Navegação Fixa Inferior ────────────────────────────────────────── */}
       <footer className="fixed inset-x-0 bottom-0 z-10">
-        {/* Botão CTA grande e proeminente quando o passo está válido */}
         {step !== "resumo" && step !== "boas-vindas" && step !== "observacoes" ? (
           <div
             className={cn(
@@ -1402,7 +1558,6 @@ function EnsaioPage() {
           </div>
         ) : null}
 
-        {/* Barra inferior com Voltar */}
         <div className="border-t border-border/80 bg-background/95 backdrop-blur-md">
           <div className="mx-auto flex max-w-2xl items-center justify-between gap-4 px-5 py-3">
             <Button
@@ -1419,14 +1574,12 @@ function EnsaioPage() {
               Voltar
             </Button>
 
-            {/* Indicador de passo inválido com dica */}
             {step !== "resumo" && step !== "boas-vindas" && step !== "observacoes" && !stepValid ? (
               <span className="text-xs text-muted-foreground animate-pulse">
                 👆 Toque em uma opção acima
               </span>
             ) : null}
 
-            {/* Botão discreto no rodapé para galeria (pular) */}
             {step === "galeria" && chosenRefIds.length > 0 ? (
               <Button
                 variant="ghost"

@@ -23,60 +23,165 @@ export const CATEGORY_LABELS: Record<Category, string> = {
 export const MULTI_CATEGORIES: Category[] = ["acessorio", "pose"];
 
 export const SESSION_TYPES = [
-  { value: "aniversario", label: "Aniversário", hint: "Seu dia, infantil, casal ou empresarial" },
-  { value: "estudio", label: "Fotos de Estúdio", hint: "Fundo liso ou cenário elaborado" },
-  { value: "casal", label: "Casal", hint: "Dois juntos, com jeito de revista" },
-  { value: "casamento", label: "Casamento", hint: "Civil, gala ou pé na areia" },
-  { value: "evento", label: "Evento especial", hint: "Halloween, Natal, Dia das Mães..." },
-  { value: "gestante", label: "Gestante", hint: "A espera em imagens" },
+  { value: "aniversario", label: "Aniversário", icon: "🎂", hint: "Seu dia, infantil, 15 anos, casal ou empresa" },
+  { value: "infantil", label: "Crianças & Bebês", icon: "🧸", hint: "Mesversário, Smash the Cake, Newborn, Temático" },
+  { value: "estudio", label: "Fotos de Estúdio", icon: "📸", hint: "Fundo liso clean, editorial ou casual chic" },
+  { value: "casal", label: "Casal & Romance", icon: "💍", hint: "Dois juntos, namoro, pré-wedding ou bodas" },
+  { value: "casamento", label: "Casamento & Noivos", icon: "👰", hint: "Civil, gala tradicional, igreja ou praia" },
+  { value: "gestante", label: "Gestante & Maternidade", icon: "🤰", hint: "A espera em imagens inesquecíveis" },
   {
     value: "corporativo",
-    label: "Corporativo / Perfil profissional",
-    hint: "Presença e credibilidade",
+    label: "Corporativo & Profissional",
+    icon: "💼",
+    hint: "Presença, autoridade e credibilidade",
   },
-  { value: "religioso", label: "Religioso / Espiritual", hint: "Serenidade e simbolismo" },
-  { value: "sensual", label: "Sensual", hint: "Sugestivo e artístico" },
-  { value: "outro", label: "Outro", hint: "Conte pra gente o que você quer" },
+  { value: "religioso", label: "Religioso & Espiritual", icon: "🕊️", hint: "Batizado, comunhão e serenidade" },
+  { value: "sensual", label: "Sensual & Boudoir", icon: "🍷", hint: "Sugestivo, íntimo e artístico" },
+  { value: "evento", label: "Evento Especial", icon: "✨", hint: "Natal, formatura, datas comemorativas" },
+  { value: "outro", label: "Outro Ensaio", icon: "🎨", hint: "Conte pra gente o que você quer" },
 ] as const;
 
-export const BIRTHDAY_SUBTYPES = [
-  "Meu aniversário",
-  "Aniversário infantil",
-  "Aniversário casal",
-  "Aniversário empresarial",
-  "Outro",
-];
+export type SubtypeOption = {
+  value: string;
+  label: string;
+  icon: string;
+  hint?: string;
+};
+
+export const SESSION_SUBTYPES_MAP: Record<string, SubtypeOption[]> = {
+  aniversario: [
+    { value: "Meu aniversário", label: "Meu aniversário (Adulto)", icon: "🎉", hint: "Seu dia especial individual" },
+    { value: "Aniversário infantil", label: "Aniversário infantil", icon: "🧸", hint: "Festa de 1 a 12 anos com decoração" },
+    { value: "Aniversário 15 anos", label: "15 Anos / Debutante", icon: "👑", hint: "Gala, vestido e celebração marcante" },
+    { value: "Aniversário casal", label: "Aniversário casal / Bodas", icon: "🥂", hint: "Comemoração a dois com estilo" },
+    { value: "Aniversário empresarial", label: "Aniversário empresarial", icon: "🏢", hint: "Comemoração da empresa ou equipe" },
+    { value: "Outro aniversário", label: "Outro estilo de aniversário", icon: "✨", hint: "Outro formato de comemoração" },
+  ],
+  infantil: [
+    { value: "Mesversário / Acompanhamento", label: "Acompanhamento / Mesversário", icon: "🍼", hint: "Evolução mês a mês do bebê" },
+    { value: "Smash the Cake / 1 Ano", label: "Smash the Cake / 1 Aninho", icon: "🎂", hint: "Bolo, diversão e primeiro aninho" },
+    { value: "Criança / Temático / Fantasia", label: "Temático / Fantasia / Personagens", icon: "🦸", hint: "Heróis, princesas ou temas lúdicos" },
+    { value: "Newborn / Recém-nascido", label: "Newborn / Recém-nascido", icon: "👶", hint: "Primeiros dias de vida com máxima delicadeza" },
+    { value: "Irmãos / Família", label: "Irmãos / Em família", icon: "👨‍👩‍👧‍👦", hint: "Crianças com os irmãos ou pais" },
+    { value: "Outro infantil", label: "Outro ensaio infantil", icon: "✨", hint: "Outro estilo para crianças" },
+  ],
+  estudio: [
+    { value: "Fundo liso clean", label: "Fundo liso clean / Minimalista", icon: "📸", hint: "Foco total na sua postura e beleza" },
+    { value: "Editorial / Moda de revista", label: "Editorial / Moda de revista", icon: "💎", hint: "Iluminação de passarela e glamour" },
+    { value: "Casual chic", label: "Casual chic / Retrato autoral", icon: "🧥", hint: "Moderno, elegante e descontraído" },
+    { value: "Cenário decorado", label: "Cenário decorado", icon: "🪑", hint: "Poltrona, luzes e elementos de estúdio" },
+  ],
+  casal: [
+    { value: "Namoro / Pré-Wedding", label: "Namoro / Pré-Wedding", icon: "💍", hint: "Noivado, aliança e expectativa do casamento" },
+    { value: "Romântico / Intimista", label: "Romântico / Intimista", icon: "💖", hint: "Abraços, conexão e carinho" },
+    { value: "Casual ao ar livre", label: "Casual ao ar livre / Pôr do sol", icon: "🌅", hint: "Golden hour, praia ou campo" },
+    { value: "Bodas / Comemoração", label: "Bodas / Comemoração a dois", icon: "🥂", hint: "Celebração de anos juntos" },
+  ],
+  casamento: [
+    { value: "Civil / Cartório", label: "Civil / Cartório", icon: "📄", hint: "Traje elegante, leve e contemporâneo" },
+    { value: "Gala / Tradicional / Igreja", label: "Gala / Igreja / Tradicional", icon: "⛪", hint: "Vestido de noiva clássico, smoking e véu" },
+    { value: "Praia / Campo / Pé na areia", label: "Praia / Campo / Ao ar livre", icon: "🏖️", hint: "Leveza, natureza e pôr do sol" },
+    { value: "Pré ou Pós Wedding", label: "Ensaio Pré / Pós Wedding", icon: "🕊️", hint: "Fotos artísticas dos noivos com calma" },
+  ],
+  gestante: [
+    { value: "Individual / Barriga em destaque", label: "Individual / Barriga em destaque", icon: "🤰", hint: "A mãe e a espera do bebê" },
+    { value: "Com o marido / Em família", label: "Com o marido / Em família", icon: "👨‍👩‍👧", hint: "Amor compartilhado pelo bebê que vai chegar" },
+    { value: "Tecido fluido / Véu artístico", label: "Tecido fluido / Artístico", icon: "🕊️", hint: "Tecidos voando e poses esculturais" },
+    { value: "Lingerie / Body rendado", label: "Lingerie / Body delicado", icon: "🤍", hint: "Intimista, suave e elegante" },
+  ],
+  corporativo: [
+    { value: "Executivo / Formal", label: "Executivo formal / Terno / Blazer", icon: "💼", hint: "Autoridade e alta liderança" },
+    { value: "Casual business / Tech", label: "Casual business / Moderno", icon: "💻", hint: "Startup, consultoria e negócios dinâmicos" },
+    { value: "Médicos / Saúde / Estética", label: "Médicos / Saúde / Estética", icon: "🩺", hint: "Jaleco, clínica ou consultório" },
+    { value: "Advogados / Jurídico", label: "Advogados / Jurídico", icon: "⚖️", hint: "Credibilidade e postura clássica" },
+    { value: "Criativos / Palestrantes / Coaches", label: "Criativos / Palestrantes / Autores", icon: "🎤", hint: "Carisma, expressão e presença de palco" },
+  ],
+  religioso: [
+    { value: "Batizado", label: "Batizado", icon: "🕊️", hint: "Vestes brancas, vela e bênção" },
+    { value: "Primeira comunhão / Crisma", label: "Primeira Comunhão / Crisma", icon: "🍞", hint: "Celebração sagrada" },
+    { value: "Espiritual / Oração / Fé", label: "Espiritual / Oração / Fé", icon: "✝️", hint: "Bíblia, terço, serenidade e devoção" },
+  ],
+  sensual: [
+    { value: "Discreto & Elegante", label: "Discreto & Elegante", icon: "✨", hint: "Sugestivo, sofisticado e artístico" },
+    { value: "Lingerie & Renda", label: "Lingerie de renda", icon: "🖤", hint: "Sensualidade marcante" },
+    { value: "Intimista / Quarto", label: "Intimista / Cama / Lençóis", icon: "🛏️", hint: "Conforto e clima intimista" },
+    { value: "Silhueta & Sombras", label: "Silhueta & Penumbra", icon: "🕯️", hint: "Luz dramática e mistério" },
+  ],
+  evento: [
+    { value: "Natal / Fim de ano", label: "Natal / Ano Novo", icon: "🎄", hint: "Árvore de natal, luzes e celebração" },
+    { value: "Formatura", label: "Formatura / Colação", icon: "🎓", hint: "Beca, diploma e conquista" },
+    { value: "Halloween / Fantasia", label: "Halloween / Fantasia", icon: "🎃", hint: "Temático, sombrio ou divertido" },
+    { value: "Dia das Mães / Pais / Família", label: "Datas familiares comemorativas", icon: "💐", hint: "União e carinho familiar" },
+  ],
+  outro: [
+    { value: "Personalizado", label: "Ensaio personalizado livre", icon: "🎨", hint: "Criamos a atmosfera exata que você descrever" },
+  ],
+};
+
+export const BIRTHDAY_SUBTYPES = SESSION_SUBTYPES_MAP.aniversario;
 
 export const FRAMING_OPTIONS = [
-  { value: "corpo-inteiro", label: "Corpo inteiro" },
-  { value: "cintura", label: "Da cintura para cima" },
-  { value: "rosto-ombros", label: "Rosto e ombros" },
-  { value: "variar", label: "Variar entre as fotos" },
+  { value: "corpo-inteiro", label: "Corpo inteiro", icon: "🧍", hint: "Aparece o look completo da cabeça aos pés" },
+  { value: "cintura", label: "Da cintura para cima", icon: "👤", hint: "Ideal para destacar roupas e expressões" },
+  { value: "rosto-ombros", label: "Rosto e ombros", icon: "🤳", hint: "Foco total na sua beleza, maquiagem e olhar" },
+  { value: "variar", label: "Variar entre as fotos", icon: "🔄", hint: "Algumas de corpo inteiro e outras mais aproximadas" },
 ];
 
 export const OUTFIT_MODES = [
-  { value: "fixa", label: "Uma roupa só em todas as fotos" },
-  { value: "variar", label: "Variar a roupa entre as fotos" },
+  { value: "fixa", label: "Uma roupa só em todas as fotos", icon: "👗", hint: "O mesmo look e estilo em todo o ensaio" },
+  { value: "variar", label: "Variar a roupa entre as fotos", icon: "👚", hint: "Looks e peças diferentes entre as fotos" },
+];
+
+export const SCENARIO_MODES = [
+  { value: "fixo", label: "Um cenário só em todas as fotos", icon: "🏛️", hint: "Todas as fotos no mesmo ambiente e decoração" },
+  { value: "variar", label: "Variar o cenário entre as fotos", icon: "🎨", hint: "Cenários e atmosferas diferentes entre as fotos" },
+];
+
+export const EXPRESSION_OPTIONS = [
+  {
+    value: "sorrindo-suave",
+    label: "Sorriso leve e natural",
+    icon: "😊",
+    hint: "Suave, acolhedor, autêntico e elegante",
+  },
+  {
+    value: "sorrindo-dentes",
+    label: "Sorrindo mostrando os dentes",
+    icon: "😁",
+    hint: "Alegre, radiante, espontâneo e festivo",
+  },
+  {
+    value: "serio",
+    label: "Sério / Marcante / Editorial",
+    icon: "😐",
+    hint: "Olhar penetrante, presença forte e ar sofisticado",
+  },
+  {
+    value: "variar",
+    label: "Variar expressões entre as fotos",
+    icon: "✨",
+    hint: "Algumas fotos sorrindo e outras mais sérias/marcantes",
+  },
 ];
 
 export const MAKEUP_OPTIONS = [
-  { value: "natural", label: "Natural", hint: "Leve, pele bonita e cores suaves" },
-  { value: "marcante", label: "Marcante", hint: "Mais cor, olho definido, batom forte" },
-  { value: "nao-quero", label: "Não quero maquiagem" },
+  { value: "natural", label: "Natural", icon: "🌸", hint: "Leve, pele bonita e cores suaves" },
+  { value: "marcante", label: "Marcante", icon: "💄", hint: "Mais cor, olho definido, batom forte" },
+  { value: "nao-quero", label: "Não quero maquiagem", icon: "✨", hint: "Rosto o mais natural possível" },
 ];
 
 export const HAIR_OPTIONS = [
-  { value: "solto", label: "Solto" },
-  { value: "preso", label: "Preso" },
-  { value: "penteado", label: "Um penteado específico" },
-  { value: "manter", label: "Manter como está nas fotos que vou enviar" },
+  { value: "solto", label: "Solto", icon: "💇‍♀️" },
+  { value: "preso", label: "Preso", icon: "👱‍♀️" },
+  { value: "penteado", label: "Um penteado específico", icon: "👑" },
+  { value: "manter", label: "Manter como está nas fotos que vou enviar", icon: "✨" },
 ];
 
 export const MOOD_OPTIONS = [
-  { value: "natural", label: "Luz natural", hint: "Como um fim de tarde bonito" },
-  { value: "dramatica", label: "Dramática", hint: "Sombras marcadas, muito contraste" },
-  { value: "suave", label: "Suave", hint: "Tudo bem iluminado e delicado" },
-  { value: "cinematografica", label: "Cinematográfica", hint: "Cara de cena de filme" },
+  { value: "natural", label: "Luz natural", icon: "☀️", hint: "Como um fim de tarde bonito" },
+  { value: "dramatica", label: "Dramática", icon: "🕯️", hint: "Sombras marcadas, muito contraste" },
+  { value: "suave", label: "Suave", icon: "🌤️", hint: "Tudo bem iluminado e delicado" },
+  { value: "cinematografica", label: "Cinematográfica", icon: "🎬", hint: "Cara de cena de filme" },
 ];
 
 export const PALETTE_OPTIONS = [
@@ -108,6 +213,14 @@ export const SESSION_TYPE_ELEMENTS: Record<string, QuickElement[]> = {
     { id: "tiara", label: "Tiara / Coroa", icon: "👑" },
     { id: "infantil", label: "Infantil / Bebê", icon: "🧸" },
     { id: "presentes", label: "Caixas de Presente", icon: "🎁" },
+  ],
+  infantil: [
+    { id: "brinquedo", label: "Brinquedos / Ursinho", icon: "🧸" },
+    { id: "bolo_infantil", label: "Bolo / Smash the cake", icon: "🎂", setCake: true },
+    { id: "baloes_infantis", label: "Balões Coloridos", icon: "🎈", setAgeNumber: true },
+    { id: "fantasia", label: "Fantasia / Personagem", icon: "🦸" },
+    { id: "newborn_cesta", label: "Cestinha / Manta Newborn", icon: "👶" },
+    { id: "coroa_infantil", label: "Coroa / Tiara Infantil", icon: "👑" },
   ],
   corporativo: [
     { id: "executivo", label: "Terno / Blazer", icon: "💼" },
@@ -198,6 +311,26 @@ export const CATEGORY_QUESTIONS: Record<string, CategoryQuestion[]> = {
     {
       key: "pessoas",
       label: "Quantas pessoas aparecem nas fotos?",
+      type: "number",
+      placeholder: "Ex: 1",
+    },
+  ],
+  infantil: [
+    {
+      key: "idade_crianca",
+      label: "Qual a idade da criança / bebê?",
+      type: "text",
+      placeholder: "Ex: 6 meses, 1 aninho, 4 anos...",
+    },
+    {
+      key: "tema_infantil",
+      label: "Tem algum tema ou personagem favorito?",
+      type: "text",
+      placeholder: "Ex: Safari, Princesas, Ursinho, Carros, Cores pastel...",
+    },
+    {
+      key: "pessoas",
+      label: "Quantas crianças ou pessoas aparecem?",
       type: "number",
       placeholder: "Ex: 1",
     },

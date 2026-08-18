@@ -118,12 +118,24 @@ export async function fetchPublicOrder(token: string): Promise<PublicOrderPayloa
       outfit_mode: config?.outfit_mode ?? null,
       makeup: config?.makeup ?? null,
       hair: config?.hair ?? null,
+      expression:
+        (config?.category_answers as Record<string, unknown>)?._expression as string ?? null,
+      outfit_reference_id:
+        (config?.category_answers as Record<string, unknown>)?._outfit_reference_id as string ?? null,
+      outfit_reference_ids:
+        (config?.category_answers as Record<string, unknown>)?._outfit_reference_ids as string[] ?? [],
+      scenario_mode:
+        (config?.category_answers as Record<string, unknown>)?._scenario_mode as string ?? null,
+      scenario_reference_id:
+        (config?.category_answers as Record<string, unknown>)?._scenario_reference_id as string ?? null,
+      scenario_reference_ids:
+        (config?.category_answers as Record<string, unknown>)?._scenario_reference_ids as string[] ?? [],
       color_palette: config?.color_palette ?? null,
       lighting_mood: config?.lighting_mood ?? null,
       visible_text_answer: config?.visible_text_answer ?? "",
       special_notes: config?.special_notes ?? "",
       category_answers:
-        (config?.category_answers as Record<string, string | number | boolean | null>) ?? {},
+        (config?.category_answers as Record<string, string | number | boolean | null | string[]>) ?? {},
       custom_references:
         ((config?.category_answers as Record<string, unknown>)?.[
           "_custom_references"
@@ -223,8 +235,17 @@ export async function savePublicOrderClient(params: {
       }
     }
 
-    // Se houver custom_references, salva dentro de category_answers._custom_references
-    if (params.config.custom_references !== undefined) {
+    // Se houver campos extras como custom_references, expression, outfit/scenario refs, salva em category_answers
+    const hasCustomFields =
+      params.config.custom_references !== undefined ||
+      params.config.expression !== undefined ||
+      params.config.outfit_reference_id !== undefined ||
+      params.config.outfit_reference_ids !== undefined ||
+      params.config.scenario_mode !== undefined ||
+      params.config.scenario_reference_id !== undefined ||
+      params.config.scenario_reference_ids !== undefined;
+
+    if (hasCustomFields) {
       const { data: currentConfig } = await publicSupabase
         .from("order_configs")
         .select("category_answers")
@@ -236,10 +257,30 @@ export async function savePublicOrderClient(params: {
       const newAnswers =
         (patch["category_answers"] as Record<string, unknown>) ?? existingAnswers;
 
-      patch["category_answers"] = {
-        ...newAnswers,
-        _custom_references: params.config.custom_references,
-      };
+      const mergedAnswers = { ...newAnswers };
+      if (params.config.custom_references !== undefined) {
+        mergedAnswers._custom_references = params.config.custom_references;
+      }
+      if (params.config.expression !== undefined) {
+        mergedAnswers._expression = params.config.expression;
+      }
+      if (params.config.outfit_reference_id !== undefined) {
+        mergedAnswers._outfit_reference_id = params.config.outfit_reference_id;
+      }
+      if (params.config.outfit_reference_ids !== undefined) {
+        mergedAnswers._outfit_reference_ids = params.config.outfit_reference_ids;
+      }
+      if (params.config.scenario_mode !== undefined) {
+        mergedAnswers._scenario_mode = params.config.scenario_mode;
+      }
+      if (params.config.scenario_reference_id !== undefined) {
+        mergedAnswers._scenario_reference_id = params.config.scenario_reference_id;
+      }
+      if (params.config.scenario_reference_ids !== undefined) {
+        mergedAnswers._scenario_reference_ids = params.config.scenario_reference_ids;
+      }
+
+      patch["category_answers"] = mergedAnswers;
     }
 
     const { error: patchError } = await publicSupabase

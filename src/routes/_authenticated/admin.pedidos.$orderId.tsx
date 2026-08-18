@@ -124,18 +124,26 @@ function OrderDetailPage() {
         position: c.position ?? 0,
       }));
 
+      const configAnswers = (config?.category_answers as Record<string, unknown>) ?? {};
       const configData: OrderConfigData = {
         session_type: config?.session_type ?? null,
         session_subtype: config?.session_subtype ?? null,
         framing: config?.framing ?? null,
         outfit_mode: config?.outfit_mode ?? null,
+        outfit_reference_id: (configAnswers._outfit_reference_id as string) ?? null,
+        outfit_reference_ids: (configAnswers._outfit_reference_ids as string[]) ?? [],
+        scenario_mode: (configAnswers._scenario_mode as string) ?? null,
+        scenario_reference_id: (configAnswers._scenario_reference_id as string) ?? null,
+        scenario_reference_ids: (configAnswers._scenario_reference_ids as string[]) ?? [],
         makeup: config?.makeup ?? null,
         hair: config?.hair ?? null,
+        expression: (configAnswers._expression as string) ?? null,
         color_palette: config?.color_palette ?? null,
         lighting_mood: config?.lighting_mood ?? null,
         visible_text_answer: config?.visible_text_answer ?? "",
         special_notes: config?.special_notes ?? "",
         category_answers: (config?.category_answers as OrderConfigData["category_answers"]) ?? {},
+        custom_references: (configAnswers._custom_references as CustomReference[]) ?? [],
         current_step: config?.current_step ?? 0,
         confirmed: config?.confirmed ?? false,
       };

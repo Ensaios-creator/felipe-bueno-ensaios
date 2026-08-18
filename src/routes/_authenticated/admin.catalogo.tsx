@@ -304,7 +304,6 @@ function CatalogPage() {
     return allRows.filter((item) => {
       const matchType =
         typeFilter === "todos" ||
-        item.session_types.length === 0 ||
         item.session_types.includes(typeFilter);
 
       const matchPeople =

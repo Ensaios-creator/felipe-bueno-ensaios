@@ -9,7 +9,7 @@ export function OptionList({
   value,
   onSelect,
 }: {
-  options: { value: string; label: string; hint?: string }[];
+  options: { value: string; label: string; hint?: string; icon?: React.ReactNode | string; badge?: string }[];
   value: string | null;
   onSelect: (value: string) => void;
 }) {
@@ -23,37 +23,165 @@ export function OptionList({
             type="button"
             onClick={() => onSelect(option.value)}
             className={cn(
-              "group relative flex w-full items-start justify-between gap-4 rounded-xl border p-4 sm:p-5 text-left transition-all duration-300",
+              "group relative flex w-full items-center justify-between gap-3.5 sm:gap-4 rounded-2xl border p-4 sm:p-5 text-left transition-all duration-300 active:scale-[0.99]",
               active
-                ? "border-foreground bg-secondary/80 shadow-editorial ring-1 ring-foreground/20 scale-[1.01]"
+                ? "border-foreground bg-secondary/90 shadow-editorial ring-1 ring-foreground/25 scale-[1.01]"
                 : "border-border/80 bg-card/60 hover:bg-card hover:border-foreground/40 hover:shadow-sm",
             )}
           >
-            <span className="flex-1 pr-2">
-              <span
+            {/* Ícone ou Emoji com container estilizado */}
+            {option.icon ? (
+              <div
                 className={cn(
-                  "block font-display text-xl sm:text-2xl font-light tracking-tight transition-colors",
-                  active ? "text-foreground font-normal" : "text-foreground/90 group-hover:text-foreground",
+                  "flex size-11 sm:size-12 shrink-0 items-center justify-center rounded-xl border text-xl sm:text-2xl transition-transform duration-300",
+                  active
+                    ? "border-foreground/30 bg-background shadow-sm scale-105"
+                    : "border-border/60 bg-secondary/50 group-hover:scale-105",
                 )}
               >
-                {option.label}
+                {typeof option.icon === "string" ? (
+                  <span className="select-none">{option.icon}</span>
+                ) : (
+                  option.icon
+                )}
+              </div>
+            ) : null}
+
+            <span className="flex-1 pr-2">
+              <span className="flex items-center gap-2">
+                <span
+                  className={cn(
+                    "block font-display text-xl sm:text-2xl font-light tracking-tight transition-colors",
+                    active ? "text-foreground font-normal" : "text-foreground/90 group-hover:text-foreground",
+                  )}
+                >
+                  {option.label}
+                </span>
+                {option.badge ? (
+                  <span className="rounded-full bg-amber-500/15 border border-amber-500/30 px-2 py-0.5 text-[0.65rem] font-semibold text-amber-600 dark:text-amber-400 uppercase tracking-wider">
+                    {option.badge}
+                  </span>
+                ) : null}
               </span>
               {option.hint ? (
-                <span className="mt-1.5 block text-xs sm:text-sm leading-relaxed text-muted-foreground font-sans">
+                <span className="mt-1 block text-xs sm:text-sm leading-relaxed text-muted-foreground font-sans">
                   {option.hint}
                 </span>
               ) : null}
             </span>
+
+            {/* Checkmark animado */}
             <span
               className={cn(
-                "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full border transition-all duration-300",
+                "mt-0.5 flex size-6 sm:size-7 shrink-0 items-center justify-center rounded-full border transition-all duration-300",
                 active
-                  ? "border-foreground bg-foreground text-background scale-110"
+                  ? "border-foreground bg-foreground text-background scale-110 shadow-sm"
                   : "border-border text-transparent group-hover:border-foreground/40",
               )}
             >
-              <Check className="size-3.5 stroke-[2.5]" />
+              <Check className="size-3.5 sm:size-4 stroke-[2.5]" />
             </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function ReferencePhotoPicker({
+  references,
+  selectedId,
+  selectedIds = [],
+  onSelect,
+  multi = false,
+  badgeText = "Copiar desta foto",
+  onPreview,
+}: {
+  references: { id: string; imageUrl: string | null; isCustom?: boolean; name?: string }[];
+  selectedId?: string | null;
+  selectedIds?: string[];
+  onSelect: (id: string) => void;
+  multi?: boolean;
+  badgeText?: string;
+  onPreview?: (url: string) => void;
+}) {
+  if (references.length === 0) return null;
+
+  return (
+    <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3">
+      {references.map((img, idx) => {
+        const isSelected = multi ? selectedIds.includes(img.id) : selectedId === img.id;
+        const selectionIndex = multi ? selectedIds.indexOf(img.id) + 1 : idx + 1;
+
+        return (
+          <button
+            key={img.id}
+            type="button"
+            onClick={() => onSelect(img.id)}
+            className={cn(
+              "group relative overflow-hidden rounded-xl aspect-[3/4] border transition-all duration-300 text-left cursor-pointer select-none",
+              isSelected
+                ? "border-foreground ring-2 ring-foreground/90 ring-offset-2 ring-offset-background scale-[1.02] shadow-editorial"
+                : "border-border/80 bg-card/60 opacity-80 hover:opacity-100 hover:border-foreground/40 hover:shadow-sm",
+            )}
+          >
+            {img.imageUrl ? (
+              <img
+                src={img.imageUrl}
+                alt={`Referência ${idx + 1}`}
+                loading="lazy"
+                className="size-full object-cover transition-transform duration-500 group-hover:scale-105"
+              />
+            ) : (
+              <div className="flex size-full items-center justify-center bg-muted text-muted-foreground">
+                <span className="text-xs">Sem foto</span>
+              </div>
+            )}
+
+            {/* Número / Selo da Foto */}
+            <div className="absolute left-2 top-2 rounded-md bg-black/60 px-2 py-0.5 text-[0.65rem] font-medium text-white backdrop-blur-sm shadow">
+              {img.isCustom ? `Sua foto #${idx + 1}` : `Foto #${idx + 1}`}
+            </div>
+
+            {/* Botão de Zoom */}
+            {img.imageUrl && onPreview ? (
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPreview(img.imageUrl!);
+                }}
+                className="absolute right-2 top-2 flex size-7 items-center justify-center rounded-full bg-black/50 text-white backdrop-blur-sm opacity-0 transition-opacity group-hover:opacity-100 hover:bg-black/80"
+                title="Ver em tamanho real"
+              >
+                <ZoomIn className="size-3.5" />
+              </span>
+            ) : null}
+
+            {/* Banner Inferior com Badge de Seleção */}
+            <div
+              className={cn(
+                "absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-3 text-white transition-opacity",
+                isSelected ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+              )}
+            >
+              <p className="text-xs font-medium flex items-center gap-1.5 leading-tight">
+                {isSelected ? (
+                  <>
+                    <Check className="size-3.5 text-emerald-400 shrink-0" />
+                    <span className="truncate">{badgeText}</span>
+                    {multi && (
+                      <span className="ml-auto flex size-4.5 items-center justify-center rounded-full bg-foreground text-[0.6rem] font-bold text-background">
+                        {selectionIndex}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-white/80">Toque para escolher</span>
+                )}
+              </p>
+            </div>
           </button>
         );
       })}

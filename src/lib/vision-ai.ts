@@ -2,13 +2,14 @@ import { AiProvider, StudioSettings, getStudioSettings } from "./studio-settings
 
 export interface ImageAiClassification {
   session_types: string[];
+  session_subtypes: string[];
   people_count: number;
   gender: "feminino" | "masculino" | "misto";
-  ambiance: "estudio" | "decorado" | "interno" | "externo" | "natureza";
-  style: string;
-  vibe: "festa" | "elegante" | "descontraido" | "poderoso" | "delicado" | "corporativo";
-  has_cake: boolean;
-  has_age_number: boolean;
+  ambiance?: "estudio" | "decorado" | "interno" | "externo" | "natureza";
+  style?: string;
+  vibe?: "festa" | "elegante" | "descontraido" | "poderoso" | "delicado" | "corporativo";
+  has_cake?: boolean;
+  has_age_number?: boolean;
   tags: string[];
   ai_description: string;
 }
@@ -35,70 +36,45 @@ const SYSTEM_INSTRUCTION = `Você é um especialista em fotografia profissional 
 Sua tarefa é analisar a imagem de referência fotográfica enviada e extrair metadados precisos e estruturados em formato JSON estrito para alimentar um catálogo de referências de ensaios.
 
 REGRAS DE CLASSIFICAÇÃO:
-1. "session_types": Lista com um ou mais tipos de ensaio adequados para esta foto. Escolha APENAS entre:
-   - "aniversario" (se houver balões, números, bolo, taça, clima de comemoração de aniversário — de qualquer idade)
+1. "session_types": Lista com um ou mais tipos de ensaio principais adequados para esta foto. Escolha APENAS entre:
+   - "aniversario" (se houver balões, números, bolo, taça, clima de comemoração de aniversário)
    - "infantil" (crianças ou bebês como protagonistas: mesversário, smash the cake, newborn, brinquedos, fantasia infantil)
    - "estudio" (fundo neutro/infinito, iluminação de estúdio, poses clássicas)
    - "casal" (duas pessoas em clima romântico/cumplicidade)
    - "casamento" (noiva, vestido branco longo, terno, véu, altar, buquê)
    - "evento" (festas temáticas, natal, reveillon, formatura, gala)
    - "gestante" (mulher grávida com barriga em evidência)
-   - "corporativo" (roupa social/blazer, postura profissional, ambiente executivo)
+   - "corporativo" (roupa social/blazer, postura profissional, ambiente executivo, médico, advogado)
    - "religioso" (batizado, comunhão, símbolos espirituais, vestes brancas)
    - "sensual" (roupa íntima, lingerie, clima intimista e artístico)
    - "outro" (quando não se encaixar nos anteriores)
 
-   ⚠️ REGRA CRÍTICA DE COMBINAÇÃO DE TIPOS:
-   - Foto de aniversário de CRIANÇA ou BEBÊ → use OBRIGATORIAMENTE ["aniversario", "infantil"]
-   - Foto de smash the cake, mesversário, newborn → use OBRIGATORIAMENTE ["infantil"]
-   - Foto de 15 anos / debutante → use ["aniversario", "evento"] e adicione tag "15anos" e "debutante"
-   - Foto de aniversário de ADULTO (sem criança) → use ["aniversario"] APENAS, nunca junto com "infantil"
-   - Foto de casamento civil (sem altar/véu/buquê formal) → use ["casamento", "casal"]
-   - Foto de ensaio corporativo médico/saúde → use ["corporativo"] e adicione tags como "jaleco", "estetoscopio", "saude"
-   - Foto de ensaio corporativo executivo/empresarial → use ["corporativo"] e adicione tags como "executivo", "blazer", "linkedin"
-   - Foto de gestante em casal → use ["gestante", "casal"]
-   - NUNCA misture "infantil" com "sensual", "casamento" ou "corporativo" no mesmo item
+2. "session_subtypes": Lista com um ou mais subnichos específicos da foto. Exemplos:
+   - Aniversário: "Meu aniversário", "Aniversário infantil", "Aniversário 15 anos", "Aniversário casal", "Aniversário empresarial"
+   - Infantil: "Mesversário / Acompanhamento", "Smash the Cake / 1 Ano", "Criança / Temático / Fantasia", "Newborn / Recém-nascido", "Irmãos / Família"
+   - Estúdio: "Fundo liso clean", "Editorial / Moda de revista", "Casual chic", "Cenário decorado"
+   - Casal: "Namoro / Pré-Wedding", "Romântico / Intimista", "Casual ao ar livre", "Bodas / Comemoração"
+   - Casamento: "Civil / Cartório", "Gala / Tradicional / Igreja", "Praia / Campo / Pé na areia", "Pré ou Pós Wedding"
+   - Gestante: "Individual / Barriga em destaque", "Com o marido / Em família", "Tecido fluido / Véu artístico", "Lingerie / Body rendado"
+   - Corporativo: "Executivo / Formal", "Casual business / Tech", "Médicos / Saúde / Estética", "Advogados / Jurídico", "Criativos / Palestrantes / Coaches"
+   - Religioso: "Batizado", "Primeira comunhão / Crisma", "Espiritual / Oração / Fé"
+   - Sensual: "Discreto & Elegante", "Lingerie & Renda", "Intimista / Quarto", "Silhueta & Sombras"
+   - Evento: "Natal / Fim de ano", "Formatura", "Halloween / Fantasia", "Dia das Mães / Pais / Família"
 
-2. "people_count": Número inteiro de pessoas visíveis em destaque na foto (ex: 1, 2, 3...).
-3. "gender": Escolha estritamente um: "feminino", "masculino" ou "misto".
-4. "ambiance": Escolha estritamente um:
-   - "estudio" (fundo liso, ciclorama, fundo infinito ou estúdio fotográfico)
-   - "decorado" (cenário com balões, flores, festa ou decoração elaborada)
-   - "interno" (dentro de casa, sala, quarto, hotel, escritório, igreja)
-   - "externo" (rua, cidade, arquitetura urbana, terraço)
-   - "natureza" (praia, campo, jardim, parque)
-5. "vibe": Escolha estritamente um: "festa", "elegante", "descontraido", "poderoso", "delicado", "corporativo".
-6. "style": Termo curto em português que resume o estilo estético (ex: "glamour", "minimalista", "festa", "romantico", "editorial", "casual chic", "executivo").
-7. "has_cake": true se houver bolo ou velas visíveis na cena, false caso contrário.
-8. "has_age_number": true se houver balões numéricos de idade ou números visíveis na decoração, false caso contrário.
-9. "tags": Lista de 5 a 10 tags curtas em português descrevendo elementos visuais específicos.
-   ⚠️ REGRAS OBRIGATÓRIAS PARA TAGS:
-   - SEMPRE inclua uma tag de faixa etária: "infantil", "bebe", "crianca", "15anos", "debutante", "adulto", "idoso" conforme visível
-   - Para corporativo: inclua tags de especialidade como "jaleco", "estetoscopio", "medico", "saude", "executivo", "blazer", "advogado", "engenheiro", "linkedin" conforme visível
-   - Para sensual: inclua "lingerie", "boudoir", "sensual"
-   - Para casamento: inclua "noiva", "noivo", "veu", "buque" conforme visível
-   - Para gestante: inclua "gestante", "gravida", "barriga" conforme visível
-   - Para religioso: inclua "batizado", "comunhao", "primeira_comunhao" conforme visível
-   - Para smash the cake: inclua "smash_the_cake", "bolo", "infantil"
-   - Para praia: inclua "praia", "areia", "mar"
-   - Para igreja/casamento religioso: inclua "igreja", "altar"
-   - Para casamento civil: inclua "civil", "cartorio" (se informal/sem véu)
-   - Exemplos de outras tags úteis: "vestido vermelho", "taça de champanhe", "balões dourados", "iluminação de revista", "salto alto", "smoking", "terno", "laço", "fantasia"
-10. "ai_description": Descrição detalhada e profissional em português (2 a 4 frases) explicando a iluminação, enquadramento, vestimenta, paleta de cores e atmosfera da imagem para servir de briefing e prompt de IA.
+3. "people_count": Número inteiro de pessoas visíveis em destaque na foto (ex: 1, 2, 3, 4...).
+4. "gender": Escolha estritamente um: "feminino", "masculino" ou "misto".
+5. "tags": Lista de 3 a 8 tags curtas com palavras-chave descritivas e os subnichos identificados.
+6. "ai_description": Descrição profissional curta em português (1 a 3 frases) da iluminação, pose e figurino.
 
 IMPORTANTE: Retorne APENAS o objeto JSON puro, sem blocos de markdown adicionais, sem explicações extras.`;
 
 const JSON_SCHEMA_PROMPT = `{
   "session_types": ["aniversario", "infantil"],
+  "session_subtypes": ["Aniversário infantil", "Smash the Cake / 1 Ano"],
   "people_count": 1,
   "gender": "feminino",
-  "ambiance": "decorado",
-  "style": "festa infantil",
-  "vibe": "festa",
-  "has_cake": true,
-  "has_age_number": true,
-  "tags": ["infantil", "crianca", "bolo", "baloes", "vestido_festa", "smash_the_cake", "decoracao_colorida"],
-  "ai_description": "Retrato de criança em festa de aniversário com cenário decorado, bolo com velas e balões coloridos. Iluminação suave e ambiente festivo com cores vibrantes. A criança usa vestido de festa e interage com a decoração de forma natural e espontânea."
+  "tags": ["Aniversário infantil", "bolo", "baloes", "vestido_festa"],
+  "ai_description": "Retrato infantil em estúdio com decoração de aniversário, bolo e balões. Iluminação suave e expressão alegre."
 }`;
 
 export async function fileToBase64DataUrl(file: File | Blob): Promise<string> {
@@ -129,8 +105,6 @@ function cleanAndParseJson(text: string): ImageAiClassification {
     "gestante", "corporativo", "religioso", "sensual", "outro"
   ];
   const validGenders = ["feminino", "masculino", "misto"];
-  const validAmbiances = ["estudio", "decorado", "interno", "externo", "natureza"];
-  const validVibes = ["festa", "elegante", "descontraido", "poderoso", "delicado", "corporativo"];
 
   const rawSessionTypes = Array.isArray(parsed.session_types) ? parsed.session_types : [];
   const session_types = rawSessionTypes
@@ -139,20 +113,26 @@ function cleanAndParseJson(text: string): ImageAiClassification {
 
   if (session_types.length === 0) session_types.push("estudio");
 
+  const session_subtypes = Array.isArray(parsed.session_subtypes)
+    ? parsed.session_subtypes.map((s: unknown) => String(s).trim()).filter(Boolean)
+    : [];
+
   const gender = validGenders.includes(parsed.gender) ? parsed.gender : "feminino";
-  const ambiance = validAmbiances.includes(parsed.ambiance) ? parsed.ambiance : "estudio";
-  const vibe = validVibes.includes(parsed.vibe) ? parsed.vibe : "elegante";
+
+  const rawTags = Array.isArray(parsed.tags) ? parsed.tags.map((t: unknown) => String(t).trim()).filter(Boolean) : [];
+  const allSubtypeTags = Array.from(new Set([...session_subtypes, ...rawTags]));
 
   return {
     session_types,
+    session_subtypes,
     people_count: typeof parsed.people_count === "number" && parsed.people_count > 0 ? Math.round(parsed.people_count) : 1,
     gender,
-    ambiance,
-    style: typeof parsed.style === "string" && parsed.style ? parsed.style : "festa",
-    vibe,
+    ambiance: parsed.ambiance || "estudio",
+    style: parsed.style || "festa",
+    vibe: parsed.vibe || "elegante",
     has_cake: Boolean(parsed.has_cake),
     has_age_number: Boolean(parsed.has_age_number),
-    tags: Array.isArray(parsed.tags) ? parsed.tags.map((t: unknown) => String(t).trim()).filter(Boolean) : [],
+    tags: allSubtypeTags,
     ai_description: typeof parsed.ai_description === "string" ? parsed.ai_description.trim() : "",
   };
 }

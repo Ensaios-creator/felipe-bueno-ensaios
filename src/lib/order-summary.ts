@@ -193,9 +193,9 @@ export function referenceImages(
     .map((c) => ({
       id: c.id,
       imageUrl: c.imageUrl,
-      style: c.style,
-      vibe: c.vibe,
-      peopleCount: c.peopleCount,
+      style: c.style ?? null,
+      vibe: c.vibe ?? null,
+      peopleCount: c.peopleCount ?? null,
       isCustom: false,
     }));
 

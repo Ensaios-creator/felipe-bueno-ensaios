@@ -2,11 +2,12 @@ export type CatalogItemPublic = {
   id: string;
   imageUrl: string | null;
   sessionTypes: string[];
+  sessionSubtypes?: string[];
   peopleCount: number | null;
   gender: string | null;
-  ambiance: string | null;
-  style: string | null;
-  vibe: string | null;
+  ambiance?: string | null;
+  style?: string | null;
+  vibe?: string | null;
   hasCake?: boolean;
   hasAgeNumber?: boolean;
   tags?: string[];

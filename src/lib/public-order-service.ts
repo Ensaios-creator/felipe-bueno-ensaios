@@ -160,6 +160,7 @@ export async function fetchPublicOrder(token: string): Promise<PublicOrderPayloa
       id: c.id,
       imageUrl: getPublicCatalogImageUrl(c.image_url),
       sessionTypes: (c.session_types ?? []) as string[],
+      sessionSubtypes: (c.tags ?? []) as string[],
       peopleCount: c.people_count ?? null,
       gender: c.gender ?? null,
       ambiance: c.ambiance ?? null,

@@ -366,23 +366,18 @@ function EnsaioPage() {
   }
 
   /**
-   * Filtragem combinatória inteligente das fotos de referência.
-   * Usa o motor de regras semânticas (SUBTYPE_RULES + filterAndRankCatalogItems)
-   * para garantir que apenas fotos do subnicho correto apareçam,
-   * com exclusões rígidas e pontuação por relevância.
+   * Filtragem de referências por nicho e subnicho.
+   * Lógica direta e transparente: exibe todas as fotos compatíveis com o nicho escolhido.
+   * Para aniversário infantil, exibe as fotos infantis/de crianças.
    */
-  function getFilteredImages(): CatalogItemPublic[] {
+  const filteredImages = useMemo(() => {
     return filterAndRankCatalogItems({
       catalog,
       sessionType: config?.session_type ?? null,
       sessionSubtype: config?.session_subtype ?? null,
       categoryAnswers: config?.category_answers ?? {},
     });
-  }
-
-  // ─── Estado derivado ─────────────────────────────────────────────────────────
-
-  const filteredImages = getFilteredImages();
+  }, [catalog, config?.session_type, config?.session_subtype, config?.category_answers]);
   const chosenRefIds = picked["referencia"] ?? [];
   const chosenCatalogRefs = catalog.filter((img) => chosenRefIds.includes(img.id));
   const customRefs = config?.custom_references ?? [];

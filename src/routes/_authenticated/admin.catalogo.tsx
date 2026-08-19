@@ -7,20 +7,17 @@ import {
   ChevronLeft,
   ChevronRight,
   Clipboard,
-  Filter,
   ImageIcon,
   Layers,
   Loader2,
   Pencil,
   Plus,
-  Radio,
   Sparkles,
   Trash2,
   UploadCloud,
   X,
-  Zap,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { AdminShell } from "@/components/admin/admin-shell";
@@ -56,9 +53,12 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  QuickElement,
-  SESSION_TYPE_ELEMENTS,
+  getAllSubtypes,
+  getSubtypesForSessionTypes,
+  normalizeText,
+  SESSION_SUBTYPES_MAP,
   SESSION_TYPES,
+  SubtypeOption,
 } from "@/lib/ensaio-options";
 import { getPublicCatalogImageUrl } from "@/lib/public-order-service";
 import { useStudioSettings } from "@/lib/studio-settings";
@@ -84,14 +84,9 @@ export type CatalogRow = {
   id: string;
   image_url: string | null;
   session_types: string[];
+  session_subtypes: string[];
   people_count: number | null;
   gender: string | null;
-  ambiance: string | null;
-  style: string | null;
-  vibe: string | null;
-  has_cake: boolean;
-  has_age_number: boolean;
-  tags: string[];
   position: number;
   active: boolean;
 };
@@ -99,15 +94,10 @@ export type CatalogRow = {
 const EMPTY_FORM: CatalogRow = {
   id: "",
   image_url: null,
-  session_types: ["estudio"],
+  session_types: ["aniversario"],
+  session_subtypes: ["Meu aniversário"],
   people_count: 1,
   gender: "feminino",
-  ambiance: "estudio",
-  style: "festa",
-  vibe: "festa",
-  has_cake: false,
-  has_age_number: false,
-  tags: [],
   position: 0,
   active: true,
 };
@@ -117,61 +107,6 @@ export const GENDER_OPTIONS = [
   { value: "masculino", label: "Masculino" },
   { value: "misto", label: "Misto / Grupo" },
 ];
-
-export const AMBIANCE_OPTIONS = [
-  { value: "estudio", label: "Estúdio / Fundo liso", icon: "📸" },
-  { value: "decorado", label: "Cenário com balões / Decorado", icon: "🎈" },
-  { value: "interno", label: "Ambiente interno / Casa / Hotel", icon: "🏠" },
-  { value: "externo", label: "Externo / Cidade / Rua", icon: "🏙️" },
-  { value: "natureza", label: "Natureza / Praia / Campo", icon: "🌿" },
-];
-
-export const VIBE_OPTIONS = [
-  { value: "festa", label: "Festa & Comemoração", icon: "🥂" },
-  { value: "elegante", label: "Elegante & Sofisticado", icon: "💎" },
-  { value: "descontraido", label: "Descontraído & Leve", icon: "☀️" },
-  { value: "poderoso", label: "Marcante & Poderoso", icon: "⚡" },
-  { value: "delicado", label: "Delicado & Suave", icon: "🌸" },
-  { value: "corporativo", label: "Profissional / Executivo", icon: "💼" },
-];
-export const QUICK_ELEMENTS: QuickElement[] = [
-  { id: "baloes", label: "Balões de Idade", icon: "🎈", setAgeNumber: true },
-  { id: "bolo", label: "Bolo / Velas", icon: "🎂", setCake: true },
-  { id: "confete", label: "Confete / Brilho", icon: "✨" },
-  { id: "champanhe", label: "Champanhe / Taça", icon: "🍾" },
-  { id: "flores", label: "Flores / Buquê", icon: "💐" },
-  { id: "vestido_festa", label: "Look Festa / Gala", icon: "👗" },
-  { id: "executivo", label: "Terno / Blazer", icon: "💼" },
-  { id: "infantil", label: "Infantil / Bebê", icon: "🧸" },
-  { id: "carro_moto", label: "Carro / Moto", icon: "🚗" },
-  { id: "luzes_neon", label: "Luzes / Neon", icon: "💡" },
-];
-
-export function getContextualElements(sessionTypes: string[]): QuickElement[] {
-  if (sessionTypes.length === 0) {
-    return Object.values(SESSION_TYPE_ELEMENTS).flat();
-  }
-  const elements: QuickElement[] = [];
-  const seen = new Set<string>();
-  for (const type of sessionTypes) {
-    const list = SESSION_TYPE_ELEMENTS[type] ?? SESSION_TYPE_ELEMENTS["outro"] ?? [];
-    for (const el of list) {
-      if (!seen.has(el.id)) {
-        seen.add(el.id);
-        elements.push(el);
-      }
-    }
-  }
-  // Elementos coringas no final se não estiverem presentes
-  const common = SESSION_TYPE_ELEMENTS["outro"] ?? [];
-  for (const el of common) {
-    if (!seen.has(el.id)) {
-      seen.add(el.id);
-      elements.push(el);
-    }
-  }
-  return elements;
-}
 
 const ITEMS_PER_PAGE = 24;
 
@@ -183,10 +118,10 @@ function CatalogPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("todos");
+  const [subtypeFilter, setSubtypeFilter] = useState("todos");
   const [peopleFilter, setPeopleFilter] = useState("todos");
   const [statusFilter, setStatusFilter] = useState("todos");
   const [genderFilter, setGenderFilter] = useState("todos");
-  const [tagFilter, setTagFilter] = useState("todos");
   const [selected, setSelected] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -195,23 +130,16 @@ function CatalogPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("catalog_items")
-        .select(
-          "id, image_url, session_types, people_count, gender, ambiance, style, vibe, has_cake, has_age_number, tags, position, active",
-        )
+        .select("id, image_url, session_types, people_count, gender, tags, position, active")
         .order("position");
       if (error) throw error;
       return (data ?? []).map((row) => ({
         id: row.id,
         image_url: row.image_url,
         session_types: (row.session_types ?? []) as string[],
+        session_subtypes: (row.tags ?? []) as string[],
         people_count: row.people_count ?? null,
         gender: row.gender ?? null,
-        ambiance: row.ambiance ?? null,
-        style: row.style ?? null,
-        vibe: row.vibe ?? null,
-        has_cake: Boolean(row.has_cake),
-        has_age_number: Boolean(row.has_age_number),
-        tags: (row.tags ?? []) as string[],
         position: row.position ?? 0,
         active: row.active ?? true,
       })) as CatalogRow[];
@@ -223,15 +151,14 @@ function CatalogPage() {
   // ─── Atalho Global de Colar Imagem (Ctrl+V) ──────────────────────────────────
   useEffect(() => {
     function handleGlobalPaste(e: ClipboardEvent) {
-      // Se estiver digitando em um input ou textarea, não intercepta
       const target = e.target as HTMLElement;
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
 
-      const items = e.clipboardData?.items;
-      if (!items) return;
+      const clipboardItems = e.clipboardData?.items;
+      if (!clipboardItems) return;
 
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
+      for (let i = 0; i < clipboardItems.length; i++) {
+        const item = clipboardItems[i];
         if (item && item.type.startsWith("image/")) {
           const file = item.getAsFile();
           if (file) {
@@ -301,11 +228,27 @@ function CatalogPage() {
   const allRows = items.data ?? [];
   const term = search.trim().toLowerCase();
 
+  // Subnichos disponíveis para filtro dinâmico
+  const availableFilterSubtypes = useMemo(() => {
+    if (typeFilter === "todos") {
+      return getAllSubtypes();
+    }
+    return SESSION_SUBTYPES_MAP[typeFilter] || [];
+  }, [typeFilter]);
+
   const filtered = useMemo(() => {
     return allRows.filter((item) => {
       const matchType =
-        typeFilter === "todos" ||
-        item.session_types.includes(typeFilter);
+        typeFilter === "todos" || item.session_types.includes(typeFilter);
+
+      const matchSubtype =
+        subtypeFilter === "todos" ||
+        item.session_subtypes.some(
+          (s) =>
+            normalizeText(s) === normalizeText(subtypeFilter) ||
+            normalizeText(s).includes(normalizeText(subtypeFilter)) ||
+            normalizeText(subtypeFilter).includes(normalizeText(s)),
+        );
 
       const matchPeople =
         peopleFilter === "todos" ||
@@ -320,28 +263,18 @@ function CatalogPage() {
         (statusFilter === "ativo" && item.active) ||
         (statusFilter === "oculto" && !item.active);
 
-      // Filtro por tag semântica (subnicho): verifica tags E session_types do item
-      const matchTag =
-        tagFilter === "todos" ||
-        item.tags.some((tag) => tag.toLowerCase() === tagFilter.toLowerCase()) ||
-        item.session_types.some((st) => st.toLowerCase() === tagFilter.toLowerCase());
-
       const matchSearch =
         !term ||
-        item.style?.toLowerCase().includes(term) ||
-        item.vibe?.toLowerCase().includes(term) ||
-        item.ambiance?.toLowerCase().includes(term) ||
         item.session_types.some((st) => st.toLowerCase().includes(term)) ||
-        item.tags.some((tag) => tag.toLowerCase().includes(term));
+        item.session_subtypes.some((sb) => sb.toLowerCase().includes(term));
 
-      return matchType && matchPeople && matchGender && matchStatus && matchTag && matchSearch;
+      return matchType && matchSubtype && matchPeople && matchGender && matchStatus && matchSearch;
     });
-  }, [allRows, typeFilter, peopleFilter, genderFilter, statusFilter, tagFilter, term]);
+  }, [allRows, typeFilter, subtypeFilter, peopleFilter, genderFilter, statusFilter, term]);
 
-  // Reset para página 1 quando os filtros mudam
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, typeFilter, peopleFilter, statusFilter, genderFilter, tagFilter]);
+  }, [search, typeFilter, subtypeFilter, peopleFilter, statusFilter, genderFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
   const paginatedItems = useMemo(() => {
@@ -396,8 +329,7 @@ function CatalogPage() {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-border/70 pb-4">
         <div>
           <p className="text-sm text-muted-foreground">
-            Fotos completas de ensaios prontos. Os clientes escolhem essas imagens como referência
-            para o ensaio deles.
+            Fotos de referência completas. Os clientes selecionam essas imagens para definir o estilo, figurino e poses do ensaio.
           </p>
           <p className="mt-1 text-xs text-muted-foreground/80 flex items-center gap-1.5">
             <Clipboard className="size-3 text-amber-500" />
@@ -419,26 +351,49 @@ function CatalogPage() {
       <div className="mb-6 space-y-3">
         <div className="flex flex-wrap items-center gap-3">
           <Input
-            placeholder="Buscar por tag, tema, cenário..."
+            placeholder="Buscar por nicho ou subnicho..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full sm:max-w-xs"
           />
 
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder="Tipo de ensaio" />
+          {/* Filtro: Nicho Principal */}
+          <Select
+            value={typeFilter}
+            onValueChange={(val) => {
+              setTypeFilter(val);
+              setSubtypeFilter("todos");
+            }}
+          >
+            <SelectTrigger className="w-52">
+              <SelectValue placeholder="Nicho principal" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="todos">Todos os tipos de ensaio</SelectItem>
+              <SelectItem value="todos">Todos os nichos</SelectItem>
               {SESSION_TYPES.map((t) => (
                 <SelectItem key={t.value} value={t.value}>
-                  {t.label}
+                  {t.icon} {t.label}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
 
+          {/* Filtro: Subnicho Direto */}
+          <Select value={subtypeFilter} onValueChange={setSubtypeFilter}>
+            <SelectTrigger className="w-56">
+              <SelectValue placeholder="Subnicho" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos os subnichos</SelectItem>
+              {availableFilterSubtypes.map((sub) => (
+                <SelectItem key={sub.value} value={sub.value}>
+                  {sub.icon} {sub.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Filtro: Pessoas */}
           <Select value={peopleFilter} onValueChange={setPeopleFilter}>
             <SelectTrigger className="w-36">
               <SelectValue placeholder="Pessoas" />
@@ -451,6 +406,7 @@ function CatalogPage() {
             </SelectContent>
           </Select>
 
+          {/* Filtro: Gênero */}
           <Select value={genderFilter} onValueChange={setGenderFilter}>
             <SelectTrigger className="w-36">
               <SelectValue placeholder="Gênero" />
@@ -465,30 +421,7 @@ function CatalogPage() {
             </SelectContent>
           </Select>
 
-          <Select value={tagFilter} onValueChange={setTagFilter}>
-            <SelectTrigger className="w-44">
-              <SelectValue placeholder="Subnicho / Tag" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Subnicho: todos</SelectItem>
-              <SelectItem value="infantil">🧸 Infantil / Bebê</SelectItem>
-              <SelectItem value="adulto">🎉 Adulto</SelectItem>
-              <SelectItem value="15anos">👑 15 Anos / Debutante</SelectItem>
-              <SelectItem value="smash_the_cake">🎂 Smash the Cake</SelectItem>
-              <SelectItem value="bebe">🍼 Newborn / Bebê</SelectItem>
-              <SelectItem value="gestante">🤰 Gestante</SelectItem>
-              <SelectItem value="noiva">👰 Casamento / Noiva</SelectItem>
-              <SelectItem value="civil">📋 Casamento Civil</SelectItem>
-              <SelectItem value="igreja">⛪ Casamento Igreja</SelectItem>
-              <SelectItem value="medico">🩺 Médico / Saúde</SelectItem>
-              <SelectItem value="executivo">💼 Executivo / Empresarial</SelectItem>
-              <SelectItem value="lingerie">🌹 Sensual / Boudoir</SelectItem>
-              <SelectItem value="praia">🏖️ Praia / Natureza</SelectItem>
-              <SelectItem value="batizado">✝️ Batizado / Religioso</SelectItem>
-              <SelectItem value="formatura">🎓 Formatura / Evento</SelectItem>
-            </SelectContent>
-          </Select>
-
+          {/* Filtro: Status */}
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-32">
               <SelectValue placeholder="Status" />
@@ -501,9 +434,9 @@ function CatalogPage() {
           </Select>
 
           {(typeFilter !== "todos" ||
+            subtypeFilter !== "todos" ||
             peopleFilter !== "todos" ||
             genderFilter !== "todos" ||
-            tagFilter !== "todos" ||
             statusFilter !== "todos" ||
             search) && (
             <Button
@@ -511,9 +444,9 @@ function CatalogPage() {
               size="sm"
               onClick={() => {
                 setTypeFilter("todos");
+                setSubtypeFilter("todos");
                 setPeopleFilter("todos");
                 setGenderFilter("todos");
-                setTagFilter("todos");
                 setStatusFilter("todos");
                 setSearch("");
               }}
@@ -623,8 +556,8 @@ function CatalogPage() {
                       />
                     </label>
 
-                    {/* Badges de Metadados sobre a imagem */}
-                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-3 text-white">
+                    {/* Badges de Nicho e Pessoas sobre a imagem */}
+                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-3 text-white">
                       <div className="flex flex-wrap gap-1">
                         {item.session_types.map((type) => {
                           const typeObj = SESSION_TYPES.find((t) => t.value === type);
@@ -633,18 +566,13 @@ function CatalogPage() {
                               key={type}
                               className="rounded bg-white/20 px-1.5 py-0.5 text-[0.65rem] font-medium backdrop-blur-sm"
                             >
-                              {typeObj?.label ?? type}
+                              {typeObj?.icon} {typeObj?.label ?? type}
                             </span>
                           );
                         })}
                         {item.people_count ? (
                           <span className="rounded bg-white/20 px-1.5 py-0.5 text-[0.65rem] font-medium backdrop-blur-sm">
                             {item.people_count} {item.people_count === 1 ? "pessoa" : "pessoas"}
-                          </span>
-                        ) : null}
-                        {item.has_age_number ? (
-                          <span className="rounded bg-amber-500/80 px-1.5 py-0.5 text-[0.65rem] font-medium text-white backdrop-blur-sm">
-                            🎈 Idade/Balões
                           </span>
                         ) : null}
                       </div>
@@ -673,20 +601,32 @@ function CatalogPage() {
                     </div>
                   </div>
 
-                  {/* Rodapé do Card */}
+                  {/* Rodapé do Card: Subnichos e Controles */}
                   <div className="space-y-2 p-3">
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span className="capitalize font-medium text-foreground">
-                        {VIBE_OPTIONS.find((v) => v.value === item.vibe)?.label.split("&")[0] ||
-                          "Estilo livre"}
-                      </span>
-                      <span className="capitalize text-muted-foreground/80">
-                        {AMBIANCE_OPTIONS.find((a) => a.value === item.ambiance)?.label.split("/")[0] ||
-                          "Estúdio"}
-                      </span>
+                    {/* Subnichos cadastrados na foto */}
+                    <div className="min-h-5 flex flex-wrap gap-1">
+                      {item.session_subtypes.length > 0 ? (
+                        item.session_subtypes.slice(0, 2).map((sub) => (
+                          <span
+                            key={sub}
+                            className="rounded bg-secondary/80 px-1.5 py-0.5 text-[0.65rem] font-medium text-muted-foreground truncate max-w-full"
+                          >
+                            {sub}
+                          </span>
+                        ))
+                      ) : (
+                        <span className="text-[0.7rem] text-muted-foreground/60 italic">
+                          Todos os subnichos
+                        </span>
+                      )}
+                      {item.session_subtypes.length > 2 ? (
+                        <span className="rounded bg-secondary/80 px-1 py-0.5 text-[0.6rem] font-medium text-muted-foreground">
+                          +{item.session_subtypes.length - 2}
+                        </span>
+                      ) : null}
                     </div>
 
-                    <div className="flex items-center justify-between pt-1 border-t border-border/50">
+                    <div className="flex items-center justify-between pt-2 border-t border-border/50">
                       <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
                         <Switch
                           checked={item.active}
@@ -725,7 +665,7 @@ function CatalogPage() {
             })}
           </div>
 
-          {/* ── Paginação para Catálogo Grande (1000+ Fotos) ────────────────── */}
+          {/* ── Paginação ───────────────────────────────────────────────────── */}
           {totalPages > 1 && (
             <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-border/70 pt-4 text-xs text-muted-foreground">
               <p>
@@ -817,7 +757,7 @@ function CatalogPage() {
   );
 }
 
-// ─── Dialog de Upload / Edição ───────────────────────────────────────────────
+// ─── Dialog de Upload / Edição Simplificado e Direto ─────────────────────────
 
 function ItemDialog({
   item,
@@ -843,7 +783,6 @@ function ItemDialog({
       if (initialFile) {
         setFile(initialFile);
         setPreviewUrl(URL.createObjectURL(initialFile));
-        // Auto-analisa com IA se for nova foto colada
         if (!item.id) {
           analyzeWithAi(initialFile);
         }
@@ -854,7 +793,7 @@ function ItemDialog({
     }
   }, [item, initialFile]);
 
-  // Colar direto quando o modal está aberto
+  // Colar direto com Ctrl+V quando o modal está aberto
   useEffect(() => {
     if (!item) return;
 
@@ -899,19 +838,15 @@ function ItemDialog({
 
       setForm((prev) => ({
         ...prev,
-        session_types: result.session_types,
+        session_types: result.session_types.length > 0 ? result.session_types : prev.session_types,
+        session_subtypes:
+          result.session_subtypes.length > 0 ? result.session_subtypes : prev.session_subtypes,
         people_count: result.people_count,
         gender: result.gender,
-        ambiance: result.ambiance,
-        vibe: result.vibe,
-        style: result.style || result.vibe,
-        has_cake: result.has_cake,
-        has_age_number: result.has_age_number,
-        tags: result.tags,
       }));
 
       toast.dismiss(toastId);
-      toast.success(`✓ Imagem classificada com sucesso pela IA (${settings.aiProvider.toUpperCase()})!`);
+      toast.success(`✓ Nichos e subnichos classificados pela IA (${settings.aiProvider.toUpperCase()})!`);
     } catch (err) {
       toast.dismiss(toastId);
       toast.error(err instanceof Error ? err.message : "Erro ao analisar com IA.");
@@ -959,7 +894,7 @@ function ItemDialog({
           return;
         }
       }
-      toast.info("Nenhuma imagem copiada encontrada na área de transferência.");
+      toast.info("Nenhuma imagem encontrada na área de transferência.");
     } catch {
       toast.info("Pressione Ctrl+V no teclado para colar a imagem.");
     }
@@ -968,27 +903,36 @@ function ItemDialog({
   function toggleSessionType(typeValue: string) {
     setForm((prev) => {
       const exists = prev.session_types.includes(typeValue);
-      const next = exists
+      const nextTypes = exists
         ? prev.session_types.filter((t) => t !== typeValue)
         : [...prev.session_types, typeValue];
-      return { ...prev, session_types: next };
+
+      // Se desmarcou um tipo, mantemos apenas os subnichos que ainda pertencem aos tipos ativos
+      const validSubtypes = getSubtypesForSessionTypes(nextTypes).map((s) => s.value);
+      const nextSubtypes = prev.session_subtypes.filter((st) => validSubtypes.includes(st));
+
+      return {
+        ...prev,
+        session_types: nextTypes,
+        session_subtypes: nextSubtypes,
+      };
     });
   }
 
-  function toggleQuickElement(element: QuickElement) {
+  function toggleSubtype(subtypeValue: string) {
     setForm((prev) => {
-      const hasTag = prev.tags.includes(element.id);
-      const nextTags = hasTag
-        ? prev.tags.filter((t) => t !== element.id)
-        : [...prev.tags, element.id];
-
-      const patch: Partial<CatalogRow> = { tags: nextTags };
-      if (element.setAgeNumber) patch.has_age_number = !hasTag;
-      if (element.setCake) patch.has_cake = !hasTag;
-
-      return { ...prev, ...patch };
+      const exists = prev.session_subtypes.includes(subtypeValue);
+      const next = exists
+        ? prev.session_subtypes.filter((s) => s !== subtypeValue)
+        : [...prev.session_subtypes, subtypeValue];
+      return { ...prev, session_subtypes: next };
     });
   }
+
+  // Lista dos subnichos disponíveis com base nos nichos marcados
+  const availableSubtypes = useMemo(() => {
+    return getSubtypesForSessionTypes(form.session_types);
+  }, [form.session_types]);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -997,7 +941,7 @@ function ItemDialog({
       return;
     }
     if (form.session_types.length === 0) {
-      toast.error("Escolha pelo menos 1 tipo de ensaio.");
+      toast.error("Escolha pelo menos 1 tipo de ensaio (nicho).");
       return;
     }
 
@@ -1015,17 +959,13 @@ function ItemDialog({
         imagePath = path;
       }
 
+      // Os subnichos são gravados na coluna tags
       const payload = {
         image_url: imagePath,
         session_types: form.session_types,
         people_count: form.people_count,
         gender: form.gender,
-        ambiance: form.ambiance,
-        style: form.vibe || "festa",
-        vibe: form.vibe,
-        has_cake: form.has_cake,
-        has_age_number: form.has_age_number,
-        tags: form.tags,
+        tags: form.session_subtypes,
         position: form.position ?? 0,
         active: form.active,
       };
@@ -1065,7 +1005,7 @@ function ItemDialog({
               {analyzingAi ? (
                 <>
                   <Loader2 className="size-3.5 animate-spin" />
-                  Analisando com IA...
+                  Classificando com IA...
                 </>
               ) : (
                 <>
@@ -1142,7 +1082,7 @@ function ItemDialog({
                 </div>
                 <p>
                   Ao selecionar ou colar uma foto, a IA ({settings.aiProvider.toUpperCase()}) identifica
-                  automaticamente o tipo de ensaio, número de pessoas, cenário e tags.
+                  automaticamente o nicho, subnichos, pessoas e gênero da foto.
                 </p>
                 <div className="flex items-center gap-2 pt-1 text-[0.7rem] text-muted-foreground/80">
                   <span className="rounded bg-secondary px-2 py-0.5 font-mono">PNG / JPG / WEBP</span>
@@ -1153,11 +1093,14 @@ function ItemDialog({
             </div>
           </div>
 
-          {/* 1. Tipos de Ensaio Compatíveis */}
+          {/* 1. Nicho Principal (Seleção Múltipla) */}
           <div>
-            <Label className="mb-2 block font-medium">
-              1. Para qual tipo de ensaio essa foto serve?
-            </Label>
+            <div className="flex items-center justify-between mb-2">
+              <Label className="font-medium">
+                1. Para qual tipo de ensaio essa foto serve?
+              </Label>
+              <span className="text-[0.7rem] text-muted-foreground">Pode marcar mais de 1</span>
+            </div>
             <div className="flex flex-wrap gap-2">
               {SESSION_TYPES.map((type) => {
                 const isSelected = form.session_types.includes(type.value);
@@ -1167,23 +1110,64 @@ function ItemDialog({
                     type="button"
                     onClick={() => toggleSessionType(type.value)}
                     className={cn(
-                      "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+                      "flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-all select-none",
                       isSelected
-                        ? "border-foreground bg-foreground text-background"
-                        : "border-border bg-card text-muted-foreground hover:text-foreground",
+                        ? "border-foreground bg-foreground text-background shadow-sm"
+                        : "border-border bg-card text-muted-foreground hover:text-foreground hover:bg-secondary",
                     )}
                   >
-                    {type.label}
+                    <span>{type.icon}</span>
+                    <span>{type.label}</span>
+                    {isSelected ? <Check className="size-3 stroke-[2.5]" /> : null}
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* 2. Quantas pessoas e 3. Gênero */}
+          {/* 2. Subnichos da Foto (Seleção Múltipla Direta) */}
+          <div className="rounded-xl border border-border/80 bg-secondary/30 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="font-medium text-foreground">
+                2. Qual subnicho?
+              </Label>
+              <span className="text-[0.7rem] text-muted-foreground">Toque para marcar os estilos</span>
+            </div>
+
+            {availableSubtypes.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {availableSubtypes.map((sub) => {
+                  const isChecked = form.session_subtypes.includes(sub.value);
+                  return (
+                    <button
+                      key={sub.value}
+                      type="button"
+                      onClick={() => toggleSubtype(sub.value)}
+                      className={cn(
+                        "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all select-none",
+                        isChecked
+                          ? "border-amber-500/80 bg-amber-500/15 text-amber-700 dark:text-amber-300 shadow-sm"
+                          : "border-border bg-card text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      <span>{sub.icon}</span>
+                      <span>{sub.label}</span>
+                      {isChecked ? <Check className="size-3 text-amber-500 stroke-[2.5]" /> : null}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground italic">
+                Selecione pelo menos um tipo de ensaio acima para ver os subnichos disponíveis.
+              </p>
+            )}
+          </div>
+
+          {/* 3. Quantas pessoas e 4. Gênero predominante */}
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <Label className="mb-2 block font-medium">2. Quantas pessoas aparecem?</Label>
+              <Label className="mb-2 block font-medium">3. Quantas pessoas aparecem?</Label>
               <div className="grid grid-cols-4 gap-2">
                 {[1, 2, 3, 4].map((count) => {
                   const isSelected =
@@ -1208,7 +1192,7 @@ function ItemDialog({
             </div>
 
             <div>
-              <Label className="mb-2 block font-medium">3. Gênero predominante</Label>
+              <Label className="mb-2 block font-medium">4. Gênero predominante</Label>
               <div className="grid grid-cols-3 gap-2">
                 {GENDER_OPTIONS.map((g) => {
                   const isSelected = form.gender === g.value;
@@ -1232,117 +1216,8 @@ function ItemDialog({
             </div>
           </div>
 
-          {/* 4. Ambiente / Cenário */}
-          <div>
-            <Label className="mb-2 block font-medium">4. Ambiente / Cenário da foto</Label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {AMBIANCE_OPTIONS.map((a) => {
-                const isSelected = form.ambiance === a.value;
-                return (
-                  <button
-                    key={a.value}
-                    type="button"
-                    onClick={() => setForm({ ...form, ambiance: a.value })}
-                    className={cn(
-                      "flex items-center gap-2 rounded-lg border p-2.5 text-left text-xs font-medium transition-colors",
-                      isSelected
-                        ? "border-foreground bg-foreground text-background"
-                        : "border-border bg-card text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    <span>{a.icon}</span>
-                    <span className="truncate">{a.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 5. Elementos em Destaque na Foto (Seleção Dinâmica Contextual) */}
-          <div className="rounded-xl border border-border/80 bg-secondary/30 p-4 space-y-3">
-            <div className="flex items-center justify-between">
-              <Label className="font-medium text-foreground">
-                5. Elementos e Acessórios em destaque (opcional)
-              </Label>
-              <span className="text-[0.7rem] text-muted-foreground">Toque para marcar</span>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {getContextualElements(form.session_types).map((el) => {
-                const isChecked = form.tags.includes(el.id);
-                return (
-                  <button
-                    key={el.id}
-                    type="button"
-                    onClick={() => toggleQuickElement(el)}
-                    className={cn(
-                      "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all select-none",
-                      isChecked
-                        ? "border-amber-500/60 bg-amber-500/15 text-amber-700 dark:text-amber-300 shadow-sm"
-                        : "border-border bg-card text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    <span>{el.icon}</span>
-                    <span>{el.label}</span>
-                    {isChecked ? <Check className="size-3 text-amber-500" /> : null}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 6. Clima / Vibe da foto */}
-          <div>
-            <Label className="mb-2 block font-medium">6. Clima / Vibe da foto</Label>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {VIBE_OPTIONS.map((v) => {
-                const isSelected = form.vibe === v.value;
-                return (
-                  <button
-                    key={v.value}
-                    type="button"
-                    onClick={() => setForm({ ...form, vibe: v.value })}
-                    className={cn(
-                      "flex items-center gap-2 rounded-lg border p-2.5 text-left text-xs font-medium transition-colors",
-                      isSelected
-                        ? "border-foreground bg-foreground text-background"
-                        : "border-border bg-card text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    <span>{v.icon}</span>
-                    <span className="truncate">{v.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Tags extras livres */}
-          <div className="space-y-2">
-            <Label htmlFor="tags" className="font-medium">
-              Outras palavras-chave / Tags extras (opcional)
-            </Label>
-            <Input
-              id="tags"
-              placeholder="Ex: vestido preto, paetê, cadeira de diretor, estúdio escuro"
-              value={form.tags.filter((t) => !getContextualElements(form.session_types).some((el) => el.id === t)).join(", ")}
-              onChange={(e) => {
-                const customTags = e.target.value
-                  .split(",")
-                  .map((t) => t.trim())
-                  .filter(Boolean);
-                const allKnownIds = new Set(Object.values(SESSION_TYPE_ELEMENTS).flat().map((el) => el.id));
-                const quickTags = form.tags.filter((t) => allKnownIds.has(t));
-                setForm({
-                  ...form,
-                  tags: [...quickTags, ...customTags],
-                });
-              }}
-            />
-          </div>
-
           {/* Status Visível */}
-          <label className="flex items-center gap-3 text-sm font-medium cursor-pointer">
+          <label className="flex items-center gap-3 text-sm font-medium cursor-pointer pt-2 border-t border-border/60">
             <Switch
               checked={form.active}
               onCheckedChange={(checked) => setForm({ ...form, active: checked })}
@@ -1364,7 +1239,7 @@ function ItemDialog({
   );
 }
 
-// ─── Dialog de Subir em Lote com IA (Batch Upload) ───────────────────────────
+// ─── Dialog de Subir em Lote com IA / Manual ─────────────────────────────────
 
 function BatchUploadDialog({
   open,
@@ -1381,11 +1256,9 @@ function BatchUploadDialog({
   const [files, setFiles] = useState<File[]>([]);
   const [useAi, setUseAi] = useState(true);
   const [sessionTypes, setSessionTypes] = useState<string[]>(["aniversario"]);
+  const [sessionSubtypes, setSessionSubtypes] = useState<string[]>(["Meu aniversário"]);
   const [peopleCount, setPeopleCount] = useState<number>(1);
   const [gender, setGender] = useState<string>("feminino");
-  const [ambiance, setAmbiance] = useState<string>("decorado");
-  const [vibe, setVibe] = useState<string>("festa");
-  const [tags, setTags] = useState<string[]>(["baloes"]);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [progressStatus, setProgressStatus] = useState<string>("");
@@ -1407,9 +1280,15 @@ function BatchUploadDialog({
     );
   }
 
-  function toggleElement(el: QuickElement) {
-    setTags((prev) => (prev.includes(el.id) ? prev.filter((t) => t !== el.id) : [...prev, el.id]));
+  function toggleSubtype(subValue: string) {
+    setSessionSubtypes((prev) =>
+      prev.includes(subValue) ? prev.filter((s) => s !== subValue) : [...prev, subValue],
+    );
   }
+
+  const batchAvailableSubtypes = useMemo(() => {
+    return getSubtypesForSessionTypes(sessionTypes);
+  }, [sessionTypes]);
 
   async function uploadBatch() {
     if (files.length === 0) {
@@ -1425,9 +1304,6 @@ function BatchUploadDialog({
     setProgress({ current: 0, total: files.length });
 
     try {
-      const defaultHasAgeNumber = tags.includes("baloes");
-      const defaultHasCake = tags.includes("bolo");
-
       const rowsToInsert = [];
 
       for (let i = 0; i < files.length; i++) {
@@ -1451,12 +1327,7 @@ function BatchUploadDialog({
           session_types: sessionTypes,
           people_count: peopleCount,
           gender: gender,
-          ambiance: ambiance,
-          style: vibe,
-          vibe: vibe,
-          has_cake: defaultHasCake,
-          has_age_number: defaultHasAgeNumber,
-          tags: tags,
+          tags: sessionSubtypes,
           position: currentCount + i,
           active: true,
         };
@@ -1469,18 +1340,17 @@ function BatchUploadDialog({
             const aiResult = await classifyCatalogImage({ image: file, settings });
             rowData = {
               ...rowData,
-              session_types: aiResult.session_types.length > 0 ? aiResult.session_types : sessionTypes,
+              session_types:
+                aiResult.session_types.length > 0 ? aiResult.session_types : sessionTypes,
+              tags:
+                aiResult.session_subtypes.length > 0
+                  ? aiResult.session_subtypes
+                  : sessionSubtypes,
               people_count: aiResult.people_count,
               gender: aiResult.gender,
-              ambiance: aiResult.ambiance,
-              style: aiResult.style || aiResult.vibe,
-              vibe: aiResult.vibe,
-              has_cake: aiResult.has_cake,
-              has_age_number: aiResult.has_age_number,
-              tags: aiResult.tags.length > 0 ? aiResult.tags : tags,
             };
           } catch (aiErr) {
-            console.warn(`[BatchAI] Aviso: falha ao classificar foto ${i + 1} com IA, usando padrões:`, aiErr);
+            console.warn(`[BatchAI] Falha na classificação com IA na foto ${i + 1}:`, aiErr);
           }
         }
 
@@ -1537,7 +1407,7 @@ function BatchUploadDialog({
               />
             </label>
 
-            {/* Grid de Pré-visualização dos arquivos selecionados */}
+            {/* Grid de Pré-visualização */}
             {files.length > 0 && (
               <div className="mt-4">
                 <div className="flex items-center justify-between mb-2 text-xs">
@@ -1587,8 +1457,7 @@ function BatchUploadDialog({
                   Classificar cada foto individualmente com IA
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  A IA ({settings.aiProvider.toUpperCase()}) analisará cada imagem para identificar
-                  especificamente o tipo de ensaio, número de pessoas, cenário e tags de cada foto.
+                  A IA ({settings.aiProvider.toUpperCase()}) identificará automaticamente os nichos, subnichos, pessoas e gênero de cada foto.
                 </p>
               </div>
               <Switch
@@ -1599,17 +1468,17 @@ function BatchUploadDialog({
             </div>
           </div>
 
-          {/* Atributos de Fallback / Manuais do lote se IA desativada */}
+          {/* Classificação Manual em Lote (se IA desativada) */}
           {!useAi && (
             <div className="rounded-xl border border-border/80 bg-secondary/30 p-5 space-y-5">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 2. Classificação manual em lote (aplicada a todas as fotos)
               </p>
 
-              {/* Tipos de ensaio */}
+              {/* Nichos */}
               <div>
                 <Label className="mb-2 block text-xs font-medium text-foreground">
-                  Tipo de ensaio compatível
+                  Nichos compatíveis
                 </Label>
                 <div className="flex flex-wrap gap-1.5">
                   {SESSION_TYPES.map((type) => {
@@ -1626,7 +1495,35 @@ function BatchUploadDialog({
                             : "border-border bg-card text-muted-foreground hover:text-foreground",
                         )}
                       >
-                        {type.label}
+                        {type.icon} {type.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Subnichos */}
+              <div>
+                <Label className="mb-2 block text-xs font-medium text-foreground">
+                  Subnichos compatíveis
+                </Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {batchAvailableSubtypes.map((sub) => {
+                    const isChecked = sessionSubtypes.includes(sub.value);
+                    return (
+                      <button
+                        key={sub.value}
+                        type="button"
+                        onClick={() => toggleSubtype(sub.value)}
+                        className={cn(
+                          "flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors",
+                          isChecked
+                            ? "border-amber-500/80 bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                            : "border-border bg-card text-muted-foreground",
+                        )}
+                      >
+                        <span>{sub.icon}</span>
+                        <span>{sub.label}</span>
                       </button>
                     );
                   })}
@@ -1675,67 +1572,6 @@ function BatchUploadDialog({
                       </button>
                     ))}
                   </div>
-                </div>
-              </div>
-
-              {/* Cenário e Clima */}
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <Label className="mb-1.5 block text-xs font-medium">Cenário</Label>
-                  <Select value={ambiance} onValueChange={setAmbiance}>
-                    <SelectTrigger className="h-9 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {AMBIANCE_OPTIONS.map((a) => (
-                        <SelectItem key={a.value} value={a.value} className="text-xs">
-                          {a.icon} {a.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label className="mb-1.5 block text-xs font-medium">Clima / Vibe</Label>
-                  <Select value={vibe} onValueChange={setVibe}>
-                    <SelectTrigger className="h-9 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {VIBE_OPTIONS.map((v) => (
-                        <SelectItem key={v.value} value={v.value} className="text-xs">
-                          {v.icon} {v.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {/* Elementos Dinâmicos do Lote */}
-              <div>
-                <Label className="mb-2 block text-xs font-medium">Elementos em destaque (dinâmico)</Label>
-                <div className="flex flex-wrap gap-1.5">
-                  {getContextualElements(sessionTypes).map((el) => {
-                    const isChecked = tags.includes(el.id);
-                    return (
-                      <button
-                        key={el.id}
-                        type="button"
-                        onClick={() => toggleElement(el)}
-                        className={cn(
-                          "flex items-center gap-1 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors",
-                          isChecked
-                            ? "border-amber-500/60 bg-amber-500/15 text-amber-700 dark:text-amber-300"
-                            : "border-border bg-card text-muted-foreground",
-                        )}
-                      >
-                        <span>{el.icon}</span>
-                        <span>{el.label}</span>
-                      </button>
-                    );
-                  })}
                 </div>
               </div>
             </div>

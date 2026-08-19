@@ -9,6 +9,7 @@ import {
   Copy,
   Download,
   MessageCircle,
+  Phone,
   RotateCcw,
   Trash2,
 } from "lucide-react";
@@ -33,7 +34,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { CatalogItemPublic, CustomReference, OrderConfigData } from "@/lib/ensaio-types";
 import { buildSummarySections, referenceImages, summaryToText } from "@/lib/order-summary";
 import { cn } from "@/lib/utils";
-import { identityPhotosMessage, whatsappLink } from "@/lib/whatsapp";
+import { formatClientPhone, identityPhotosMessage, whatsappDirectLink, whatsappLink } from "@/lib/whatsapp";
 import { getDeadlineInfo } from "./admin.index";
 
 export const Route = createFileRoute("/_authenticated/admin/pedidos/$orderId")({
@@ -205,6 +206,7 @@ function OrderDetailPage() {
   const sections = buildSummarySections({
     orderNumber: order.order_number,
     clientName: order.client_name,
+    clientPhone: order.client_phone,
     photoCount: order.photo_count,
     config: configData,
     selections,
@@ -368,6 +370,34 @@ function OrderDetailPage() {
           <Clock className="size-3" />
           Prazo: {deadlineInfo.label}
         </span>
+
+        {order.client_phone ? (
+          <div className="inline-flex items-center gap-1.5 rounded-full border border-emerald-600/30 bg-emerald-500/10 px-3 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+            <MessageCircle className="size-3.5" />
+            <span>WhatsApp: {formatClientPhone(order.client_phone)}</span>
+            <button
+              type="button"
+              onClick={() => copy("phone", order.client_phone)}
+              title="Copiar número"
+              className="ml-1 rounded p-0.5 hover:bg-emerald-600/20 text-foreground transition-colors"
+            >
+              {copiedKey === "phone" ? (
+                <Check className="size-3 text-emerald-600" />
+              ) : (
+                <Copy className="size-3 text-muted-foreground" />
+              )}
+            </button>
+            <a
+              href={whatsappDirectLink(order.client_phone)}
+              target="_blank"
+              rel="noreferrer"
+              title="Abrir WhatsApp"
+              className="ml-0.5 rounded p-0.5 hover:bg-emerald-600/20 text-emerald-700 dark:text-emerald-400 transition-colors"
+            >
+              <MessageCircle className="size-3" />
+            </a>
+          </div>
+        ) : null}
       </div>
 
       <div className="grid gap-8 lg:grid-cols-3">

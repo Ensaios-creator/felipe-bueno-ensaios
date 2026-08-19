@@ -11,6 +11,8 @@ import {
   LayoutGrid,
   List,
   MessageCircle,
+  Pencil,
+  Phone,
   Plus,
   RotateCcw,
   Sparkles,
@@ -55,7 +57,13 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
-import { configuratorLinkMessage, identityPhotosMessage, whatsappLink } from "@/lib/whatsapp";
+import {
+  configuratorLinkMessage,
+  formatClientPhone,
+  identityPhotosMessage,
+  whatsappDirectLink,
+  whatsappLink,
+} from "@/lib/whatsapp";
 
 export const Route = createFileRoute("/_authenticated/admin/")({
   head: () => ({
@@ -345,11 +353,15 @@ function OrdersPage() {
 
       // Filtro de Busca
       const term = search.trim().toLowerCase();
+      const termDigits = term.replace(/\D/g, "");
+      const phoneDigits = (order.client_phone || "").replace(/\D/g, "");
       const matchSearch =
         !term ||
         order.client_name.toLowerCase().includes(term) ||
         String(order.order_number).includes(term) ||
-        (order.package_label && order.package_label.toLowerCase().includes(term));
+        (order.package_label && order.package_label.toLowerCase().includes(term)) ||
+        (order.client_phone && order.client_phone.toLowerCase().includes(term)) ||
+        (Boolean(termDigits) && phoneDigits.includes(termDigits));
 
       return matchStatus && matchSearch;
     })
@@ -727,10 +739,25 @@ function OrdersPage() {
                           >
                             {order.client_name}
                           </Link>
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            {order.photo_count} fotos
-                            {order.package_label ? ` · ${order.package_label}` : ""}
-                          </p>
+                          <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+                            <span>
+                              {order.photo_count} fotos
+                              {order.package_label ? ` · ${order.package_label}` : ""}
+                            </span>
+                            {order.client_phone ? (
+                              <a
+                                href={whatsappDirectLink(order.client_phone)}
+                                target="_blank"
+                                rel="noreferrer"
+                                onClick={(e) => e.stopPropagation()}
+                                title="WhatsApp do cliente"
+                                className="flex items-center gap-1 font-mono text-[11px] text-emerald-700 dark:text-emerald-400 hover:underline"
+                              >
+                                <MessageCircle className="size-3" />
+                                <span>{formatClientPhone(order.client_phone)}</span>
+                              </a>
+                            ) : null}
+                          </div>
 
                           <div className="mt-2 flex flex-wrap items-center gap-1.5">
                             <span
@@ -788,6 +815,8 @@ function OrderRowCard({
   const [notes, setNotes] = useState(getCleanNotes(order.internal_notes));
   const [dueHours, setDueHours] = useState(getOrderDueHours(order));
   const [packageLabel, setPackageLabel] = useState(order.package_label ?? "");
+  const [phoneInput, setPhoneInput] = useState(order.client_phone ?? "");
+  const [isEditingPhone, setIsEditingPhone] = useState(false);
   const alert = order.status !== "Entregue" && needsIdentityPhotos(order);
   const isDelivered = order.status === "Entregue";
   const deadlineInfo = getDeadlineInfo(order);
@@ -822,7 +851,107 @@ function OrderRowCard({
           >
             {order.client_name}
           </Link>
-          <p className="mt-1 text-sm text-muted-foreground">{order.photo_count} fotos contratadas</p>
+
+          {/* Número de Telefone / WhatsApp e Fotos Contratadas */}
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+            {isEditingPhone ? (
+              <div className="flex items-center gap-1.5 py-0.5">
+                <Input
+                  className="h-7 w-48 font-mono text-xs px-2"
+                  placeholder="DDD + Número (ex: 37999998888)"
+                  value={phoneInput}
+                  autoFocus
+                  onChange={(e) => setPhoneInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      onPatch({ client_phone: phoneInput.trim() });
+                      setIsEditingPhone(false);
+                      toast.success("Telefone atualizado com sucesso!");
+                    } else if (e.key === "Escape") {
+                      setPhoneInput(order.client_phone ?? "");
+                      setIsEditingPhone(false);
+                    }
+                  }}
+                />
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => {
+                    onPatch({ client_phone: phoneInput.trim() });
+                    setIsEditingPhone(false);
+                    toast.success("Telefone atualizado com sucesso!");
+                  }}
+                >
+                  <Check className="size-3.5 text-emerald-600" />
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-1.5 text-xs text-muted-foreground"
+                  onClick={() => {
+                    setPhoneInput(order.client_phone ?? "");
+                    setIsEditingPhone(false);
+                  }}
+                >
+                  Cancelar
+                </Button>
+              </div>
+            ) : order.client_phone ? (
+              <div className="flex items-center gap-1.5 font-medium text-muted-foreground group/phone">
+                <a
+                  href={whatsappDirectLink(order.client_phone)}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="Abrir WhatsApp da cliente"
+                  className="flex items-center gap-1 text-emerald-700 hover:text-emerald-800 dark:text-emerald-400 dark:hover:text-emerald-300 transition-colors"
+                >
+                  <MessageCircle className="size-3.5" />
+                  <span className="font-mono">{formatClientPhone(order.client_phone)}</span>
+                </a>
+                <button
+                  type="button"
+                  title="Copiar número"
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(order.client_phone);
+                    toast.success("Número copiado!");
+                  }}
+                  className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+                >
+                  <Copy className="size-3" />
+                </button>
+                <button
+                  type="button"
+                  title="Editar telefone"
+                  onClick={() => {
+                    setPhoneInput(order.client_phone ?? "");
+                    setIsEditingPhone(true);
+                  }}
+                  className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-secondary opacity-0 group-hover/phone:opacity-100 transition-all"
+                >
+                  <Pencil className="size-3" />
+                </button>
+                <span className="text-muted-foreground/60">·</span>
+                <span>{order.photo_count} fotos contratadas</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPhoneInput("");
+                    setIsEditingPhone(true);
+                  }}
+                  className="inline-flex items-center gap-1 text-primary/80 hover:text-primary hover:underline transition-colors"
+                >
+                  <Phone className="size-3" />
+                  <span>+ Adicionar WhatsApp</span>
+                </button>
+                <span className="text-muted-foreground/60">·</span>
+                <span>{order.photo_count} fotos contratadas</span>
+              </div>
+            )}
+          </div>
 
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <Badge

@@ -13,6 +13,43 @@ function digits(phone: string) {
   return only.startsWith("55") ? only : `55${only}`;
 }
 
+export function formatClientPhone(phone: string | null | undefined): string {
+  if (!phone) return "";
+  const only = phone.replace(/\D/g, "");
+  if (!only) return phone.trim();
+
+  if (only.startsWith("55") && only.length === 13) {
+    const ddd = only.slice(2, 4);
+    const part1 = only.slice(4, 9);
+    const part2 = only.slice(9, 13);
+    return `(${ddd}) ${part1}-${part2}`;
+  }
+  if (only.startsWith("55") && only.length === 12) {
+    const ddd = only.slice(2, 4);
+    const part1 = only.slice(4, 8);
+    const part2 = only.slice(8, 12);
+    return `(${ddd}) ${part1}-${part2}`;
+  }
+  if (only.length === 11) {
+    const ddd = only.slice(0, 2);
+    const part1 = only.slice(2, 7);
+    const part2 = only.slice(7, 11);
+    return `(${ddd}) ${part1}-${part2}`;
+  }
+  if (only.length === 10) {
+    const ddd = only.slice(0, 2);
+    const part1 = only.slice(2, 6);
+    const part2 = only.slice(6, 10);
+    return `(${ddd}) ${part1}-${part2}`;
+  }
+  return phone;
+}
+
+export function whatsappDirectLink(phone: string) {
+  const number = digits(phone);
+  return number ? `https://wa.me/${number}` : "";
+}
+
 export function whatsappLink(phone: string, message: string) {
   const number = digits(phone);
   const text = encodeURIComponent(message);

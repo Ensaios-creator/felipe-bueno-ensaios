@@ -9,6 +9,7 @@ import {
   labelFor,
 } from "./ensaio-options";
 import type { CatalogItemPublic, CustomReference, OrderConfigData } from "./ensaio-types";
+import { formatClientPhone } from "./whatsapp";
 
 export type SummarySection = { title: string; body: string };
 
@@ -30,12 +31,13 @@ export function sessionTypeLabel(config: OrderConfigData) {
 export function buildSummarySections(params: {
   orderNumber: number;
   clientName: string;
+  clientPhone?: string;
   photoCount: number;
   config: OrderConfigData;
   selections: Record<string, string[]>;
   catalog: CatalogItemPublic[];
 }): SummarySection[] {
-  const { orderNumber, clientName, photoCount, config, selections, catalog } = params;
+  const { orderNumber, clientName, clientPhone, photoCount, config, selections, catalog } = params;
 
   const chosenRefIds = selections["referencia"] ?? Object.values(selections).flat();
   const chosenRefs = catalog.filter((c) => chosenRefIds.includes(c.id));
@@ -114,8 +116,11 @@ export function buildSummarySections(params: {
     ? `${expressionObj.icon} ${expressionObj.label}`
     : "Natural / Não especificado";
 
+  const phoneLine = clientPhone ? `WhatsApp / Contato: ${formatClientPhone(clientPhone)}` : null;
+
   const header = [
     `PEDIDO #${orderNumber} — ${clientName}`,
+    phoneLine,
     `Tipo de ensaio: ${sessionTypeLabel(config)}`,
     `Quantidade de fotos do pacote: ${photoCount}`,
     `Fotos de referência escolhidas: ${totalRefsCount} de ${photoCount}${customRefs.length > 0 ? ` (${customRefs.length} enviadas pelo cliente)` : ""}`,
@@ -125,7 +130,9 @@ export function buildSummarySections(params: {
     `Roupa / Look: ${outfitDescription}`,
     `Cenário / Ambiente: ${scenarioDescription}`,
     `Cabelo: ${hairDescription}`,
-  ].join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 
   const questions = CATEGORY_QUESTIONS[config.session_type ?? ""] ?? [];
   const specific = questions
